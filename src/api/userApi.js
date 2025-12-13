@@ -1,0 +1,60 @@
+// Mock API service for user functionality
+import apiClient from "./apiClient";
+
+class UserApi {
+  // Register a new user
+  async register(userData) {
+    try {
+      const response = await apiClient.post("/auth/register", userData);
+      if (response.token) {
+        apiClient.setToken(response.token);
+      }
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // Login user
+  async login(email, password) {
+    try {
+      const response = await apiClient.post("/auth/login", { email, password });
+      if (response.token) {
+        apiClient.setToken(response.token);
+      }
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // Logout user
+  logout() {
+    apiClient.removeToken();
+  }
+
+  // Get current user profile
+  async getCurrentUser() {
+    try {
+      return await apiClient.get("/auth/profile", true);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // Update user profile
+  async updateProfile(profileData) {
+    try {
+      return await apiClient.put("/auth/profile", profileData, true);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // Check if user is authenticated
+  isAuthenticated() {
+    return !!apiClient.getToken();
+  }
+}
+
+export default new UserApi();
