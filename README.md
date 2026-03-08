@@ -1,5 +1,8 @@
 # GlowSphere - Social Learning Platform
 
+![Repository Image](image.png)
+
+
 GlowSphere is a mobile-first social learning app that combines group video conferencing, focused study tools, and a social feed for short videos and interactions.
 
 ## Features
@@ -33,56 +36,8 @@ GlowSphere is a mobile-first social learning app that combines group video confe
 - **State Management**: React Context API
 - **UI Components**: Lucide React icons
 
-## Getting Started
 
-### Quick Start (Recommended - Automatic MongoDB)
 
-**Windows:**
-1. Make sure Docker Desktop is installed and running
-2. Double-click `start-dev.bat`
-3. Open browser to `http://localhost:5173`
-
-**Mac/Linux:**
-1. Make sure Docker is installed and running
-2. Run: `chmod +x start-dev.sh && ./start-dev.sh`
-3. Open browser to `http://localhost:5173`
-
-This will automatically start MongoDB, Backend, and Frontend for you!
-
-### Manual Setup
-
-1. Clone the repository
-2. Install dependencies:
-   ```bash
-   npm install
-   cd backend && npm install && cd ..
-   ```
-3. Start MongoDB (if not using Docker)
-4. Start the backend:
-   ```bash
-   cd backend && npm run dev
-   ```
-5. Start the frontend (in a new terminal):
-   ```bash
-   npm run dev
-   ```
-
-See `QUICK_START.md` for detailed instructions.
-
-## Project Structure
-
-```
-src/
-├── components/
-│   ├── campfire/       # Video chat components
-│   ├── studysuite/     # Pomodoro timer and notes
-│   ├── feed/           # Social feed components
-│   └── ui/             # Shared UI components
-├── context/            # React context providers
-├── pages/              # Page components
-├── App.jsx             # Main app component
-└── main.jsx            # Entry point
-```
 
 ## Core Components
 
@@ -116,21 +71,5 @@ GlowSphere is built with a mobile-first approach:
 - Touch-friendly controls
 - Optimized for both mobile and desktop experiences
 
-## Authentication
 
-The app uses React Context for authentication state management:
-- Login/logout functionality
-- User session persistence
-- Protected routes
 
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Open a pull request
-
-## License
-
-This project is licensed under the MIT License.
