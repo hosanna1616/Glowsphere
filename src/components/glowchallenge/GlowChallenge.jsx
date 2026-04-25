@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
+import { motion } from "framer-motion";
+import { Sparkles, X } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import ChallengeApi from "../../api/challengeApi";
@@ -10,7 +12,6 @@ const GlowChallenge = () => {
   const { showToast } = useToast();
   const [challenges, setChallenges] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("all");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newChallenge, setNewChallenge] = useState({
     title: "",
@@ -22,16 +23,24 @@ const GlowChallenge = () => {
     category: "general",
   });
 
-  // Load challenges on mount
+  // Load all challenges from API (real data, not filtered client-side by status tabs)
   useEffect(() => {
     loadChallenges();
-  }, [filter]);
+  }, []);
+
+  useEffect(() => {
+    if (!showCreateModal) return undefined;
+    const onKey = (e) => {
+      if (e.key === "Escape") setShowCreateModal(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showCreateModal]);
 
   const loadChallenges = async () => {
     try {
       setLoading(true);
-      const status = filter === "all" ? null : filter;
-      const challengeData = await ChallengeApi.getChallenges(status);
+      const challengeData = await ChallengeApi.getChallenges(null);
       setChallenges(challengeData || []);
     } catch (error) {
       console.error("Failed to load challenges:", error);
@@ -77,8 +86,9 @@ const GlowChallenge = () => {
   const getUserProgress = (challenge) => {
     if (!user || !challenge.participants) return 0;
     const participant = challenge.participants.find(
-      (p) => p.userId?._id?.toString() === user._id?.toString() || 
-             p.userId?.toString() === user._id?.toString()
+      (p) =>
+        p.userId?._id?.toString() === user._id?.toString() ||
+        p.userId?.toString() === user._id?.toString(),
     );
     return participant?.progress || 0;
   };
@@ -86,8 +96,9 @@ const GlowChallenge = () => {
   const isUserJoined = (challenge) => {
     if (!user || !challenge.participants) return false;
     return challenge.participants.some(
-      (p) => p.userId?._id?.toString() === user._id?.toString() || 
-             p.userId?.toString() === user._id?.toString()
+      (p) =>
+        p.userId?._id?.toString() === user._id?.toString() ||
+        p.userId?.toString() === user._id?.toString(),
     );
   };
 
@@ -105,7 +116,8 @@ const GlowChallenge = () => {
       loadChallenges();
     } catch (error) {
       console.error("Failed to join challenge:", error);
-      const errorMessage = error.message || "Failed to join challenge. Please try again.";
+      const errorMessage =
+        error.message || "Failed to join challenge. Please try again.";
       showToast(errorMessage, "error");
     }
   };
@@ -134,14 +146,18 @@ const GlowChallenge = () => {
 
   const handleCreateChallenge = async (e) => {
     e.preventDefault();
-    
+
     if (!user) {
       showToast("Please log in to create challenges", "warning");
       navigate("/login");
       return;
     }
 
-    if (!newChallenge.title || !newChallenge.description || !newChallenge.deadline) {
+    if (
+      !newChallenge.title ||
+      !newChallenge.description ||
+      !newChallenge.deadline
+    ) {
       showToast("Please fill in all required fields", "warning");
       return;
     }
@@ -176,21 +192,19 @@ const GlowChallenge = () => {
       loadChallenges();
     } catch (error) {
       console.error("Failed to create challenge:", error);
-      const errorMessage = error.message || "Failed to create challenge. Please try again.";
+      const errorMessage =
+        error.message || "Failed to create challenge. Please try again.";
       showToast(errorMessage, "error");
     }
   };
 
-  const filteredChallenges =
-    filter === "all"
-      ? challenges
-      : challenges.filter((challenge) => challenge.status === filter);
-
   const activeCount = challenges.filter((c) => c.status === "active").length;
-  const completedCount = challenges.filter((c) => c.status === "completed").length;
+  const completedCount = challenges.filter(
+    (c) => c.status === "completed",
+  ).length;
   const totalParticipants = challenges.reduce(
     (sum, c) => sum + (c.participants?.length || 0),
-    0
+    0,
   );
 
   return (
@@ -213,49 +227,38 @@ const GlowChallenge = () => {
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-2 mb-8">
-        <button
-          className={`px-4 py-2 rounded-full ${
-            filter === "all"
-              ? "bg-gold-gradient text-black font-semibold"
-              : "bg-card-bg border border-amber-500/30 text-amber-200"
-          } hover:opacity-90 transition-all`}
-          onClick={() => setFilter("all")}
-        >
-          All Challenges
-        </button>
-        <button
-          className={`px-4 py-2 rounded-full ${
-            filter === "active"
-              ? "bg-amber-500 text-black font-semibold"
-              : "bg-card-bg border border-amber-500/30 text-amber-200"
-          } hover:opacity-90 transition-all`}
-          onClick={() => setFilter("active")}
-        >
-          Active
-        </button>
-        <button
-          className={`px-4 py-2 rounded-full ${
-            filter === "upcoming"
-              ? "bg-amber-400 text-black font-semibold"
-              : "bg-card-bg border border-amber-500/30 text-amber-200"
-          } hover:opacity-90 transition-all`}
-          onClick={() => setFilter("upcoming")}
-        >
-          Upcoming
-        </button>
-        <button
-          className={`px-4 py-2 rounded-full ${
-            filter === "completed"
-              ? "bg-amber-600 text-black font-semibold"
-              : "bg-card-bg border border-amber-500/30 text-amber-200"
-          } hover:opacity-90 transition-all`}
-          onClick={() => setFilter("completed")}
-        >
-          Completed
-        </button>
-      </div>
+      <motion.section
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mb-10 rounded-2xl border border-amber-500/30 bg-gradient-to-br from-stone-950/95 via-stone-900/85 to-rose-950/20 p-6 sm:p-8 overflow-hidden relative shadow-[0_0_48px_rgba(251,113,133,0.1)]"
+      >
+        <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top_right,_rgba(251,191,36,0.14),_transparent_52%)]" />
+        <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <span className="mt-1 inline-flex h-11 w-11 items-center justify-center rounded-full bg-amber-500/15 border border-amber-400/35 text-amber-300">
+              <Sparkles className="w-5 h-5" aria-hidden />
+            </span>
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.22em] text-amber-200/55">
+                Featured
+              </p>
+              <h2 className="text-xl sm:text-2xl font-semibold text-transparent bg-clip-text bg-gradient-to-r from-rose-100 via-amber-200 to-amber-400">
+                Parallel Bloom: Future Paths
+              </h2>
+              <p className="text-amber-100/80 text-sm mt-2 max-w-xl leading-relaxed">
+                See realistic future selves — day-in-the-life scenes, mirror questions, compare
+                mode, and private Future Capsules. Built for emotional alignment, not pressure.
+              </p>
+            </div>
+          </div>
+          <Link
+            to="/glowchallenge/parallel-bloom"
+            className="inline-flex items-center justify-center shrink-0 px-6 py-3 rounded-full bg-gold-gradient text-black font-semibold text-sm hover:opacity-95 transition-opacity shadow-[0_0_28px_rgba(251,191,36,0.35)]"
+          >
+            Enter Parallel Bloom
+          </Link>
+        </div>
+      </motion.section>
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
@@ -288,14 +291,14 @@ const GlowChallenge = () => {
           <div className="flex justify-center items-center h-64">
             <div className="text-amber-300">Loading challenges...</div>
           </div>
-        ) : filteredChallenges.length === 0 ? (
+        ) : challenges.length === 0 ? (
           <div className="bg-card-bg backdrop-blur-sm rounded-xl p-12 border border-amber-500/30 text-center">
             <p className="text-amber-200 text-lg">
               No challenges found. Be the first to create one!
             </p>
           </div>
         ) : (
-          filteredChallenges.map((challenge) => {
+          challenges.map((challenge) => {
             const userProgress = getUserProgress(challenge);
             const joined = isUserJoined(challenge);
             const daysRemaining = getDaysRemaining(challenge.deadline);
@@ -313,14 +316,16 @@ const GlowChallenge = () => {
                       </h3>
                       <span
                         className={`px-3 py-1 rounded-full text-sm ${getStatusColor(
-                          challenge.status
+                          challenge.status,
                         )} text-black font-semibold`}
                       >
                         {challenge.status.charAt(0).toUpperCase() +
                           challenge.status.slice(1)}
                       </span>
                     </div>
-                    <p className="text-amber-200 mb-4">{challenge.description}</p>
+                    <p className="text-amber-200 mb-4">
+                      {challenge.description}
+                    </p>
 
                     <div className="flex flex-wrap gap-2 mb-4">
                       <span className="text-sm bg-stone-800 px-2 py-1 rounded-full text-amber-200">
@@ -330,7 +335,8 @@ const GlowChallenge = () => {
                         ⏳ {formatDate(challenge.deadline)}
                       </span>
                       <span className="text-sm bg-stone-800 px-2 py-1 rounded-full text-amber-200">
-                        {challenge.duration} {challenge.duration === 1 ? "day" : "days"}
+                        {challenge.duration}{" "}
+                        {challenge.duration === 1 ? "day" : "days"}
                       </span>
                       {daysRemaining > 0 && (
                         <span className="text-sm bg-red-500/20 px-2 py-1 rounded-full text-red-300">
@@ -341,7 +347,9 @@ const GlowChallenge = () => {
 
                     {challenge.rewards && challenge.rewards.length > 0 && (
                       <div className="mb-4">
-                        <h4 className="font-bold mb-2 text-amber-300">Rewards:</h4>
+                        <h4 className="font-bold mb-2 text-amber-300">
+                          Rewards:
+                        </h4>
                         <ul className="text-amber-200 space-y-1">
                           {challenge.rewards.map((reward, index) => (
                             <li key={index} className="flex items-center">
@@ -360,7 +368,9 @@ const GlowChallenge = () => {
                       <div className="mb-4">
                         <div className="flex justify-between text-sm mb-1">
                           <span className="text-amber-200">Your Progress</span>
-                          <span className="text-amber-200">{userProgress}%</span>
+                          <span className="text-amber-200">
+                            {userProgress}%
+                          </span>
                         </div>
                         <div className="w-full bg-stone-800 rounded-full h-2">
                           <div
@@ -375,7 +385,10 @@ const GlowChallenge = () => {
                             max="100"
                             value={userProgress}
                             onChange={(e) =>
-                              updateProgress(challenge._id || challenge.id, parseInt(e.target.value))
+                              updateProgress(
+                                challenge._id || challenge.id,
+                                parseInt(e.target.value),
+                              )
                             }
                             className="w-32"
                           />
@@ -388,7 +401,9 @@ const GlowChallenge = () => {
                         <>
                           <button
                             className="px-4 py-2 bg-red-500/20 border border-red-500/50 rounded-full text-sm font-medium hover:bg-red-500/30 transition-colors text-red-300"
-                            onClick={() => leaveChallenge(challenge._id || challenge.id)}
+                            onClick={() =>
+                              leaveChallenge(challenge._id || challenge.id)
+                            }
                           >
                             Leave Challenge
                           </button>
@@ -396,7 +411,9 @@ const GlowChallenge = () => {
                       ) : challenge.status === "active" ? (
                         <button
                           className="px-4 py-2 bg-gold-gradient rounded-full text-sm font-medium hover:opacity-90 transition-opacity text-black"
-                          onClick={() => joinChallenge(challenge._id || challenge.id)}
+                          onClick={() =>
+                            joinChallenge(challenge._id || challenge.id)
+                          }
                         >
                           Join Challenge
                         </button>
@@ -425,115 +442,160 @@ const GlowChallenge = () => {
         )}
       </div>
 
-      {/* Create Challenge Modal */}
+      {/* Propose challenge — scrollable panel; Back / X / Esc / backdrop tap to exit */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-stone-900 rounded-2xl p-6 max-w-md w-full border border-amber-500/30">
-            <h2 className="text-2xl font-bold text-amber-300 mb-4">
-              Create New Challenge
-            </h2>
-            <form onSubmit={handleCreateChallenge}>
-              <div className="mb-4">
-                <label className="block text-amber-200 mb-2">Title *</label>
-                <input
-                  type="text"
-                  value={newChallenge.title}
-                  onChange={(e) =>
-                    setNewChallenge({ ...newChallenge, title: e.target.value })
-                  }
-                  className="w-full bg-stone-800 border border-amber-500/30 rounded-lg p-3 text-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  required
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-amber-200 mb-2">Description *</label>
-                <textarea
-                  value={newChallenge.description}
-                  onChange={(e) =>
-                    setNewChallenge({
-                      ...newChallenge,
-                      description: e.target.value,
-                    })
-                  }
-                  className="w-full bg-stone-800 border border-amber-500/30 rounded-lg p-3 text-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  rows="3"
-                  required
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-amber-200 mb-2">Deadline *</label>
-                <input
-                  type="date"
-                  value={newChallenge.deadline}
-                  onChange={(e) =>
-                    setNewChallenge({ ...newChallenge, deadline: e.target.value })
-                  }
-                  className="w-full bg-stone-800 border border-amber-500/30 rounded-lg p-3 text-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  required
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-amber-200 mb-2">Duration (days)</label>
-                <input
-                  type="number"
-                  value={newChallenge.duration}
-                  onChange={(e) =>
-                    setNewChallenge({
-                      ...newChallenge,
-                      duration: parseInt(e.target.value) || 30,
-                    })
-                  }
-                  className="w-full bg-stone-800 border border-amber-500/30 rounded-lg p-3 text-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  min="1"
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-amber-200 mb-2">
-                  Rewards (comma-separated)
-                </label>
-                <input
-                  type="text"
-                  value={newChallenge.rewards}
-                  onChange={(e) =>
-                    setNewChallenge({ ...newChallenge, rewards: e.target.value })
-                  }
-                  placeholder="🏅 Badge, 🔥 500 XP"
-                  className="w-full bg-stone-800 border border-amber-500/30 rounded-lg p-3 text-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-amber-200 mb-2">
-                  Requirements (comma-separated)
-                </label>
-                <input
-                  type="text"
-                  value={newChallenge.requirements}
-                  onChange={(e) =>
-                    setNewChallenge({
-                      ...newChallenge,
-                      requirements: e.target.value,
-                    })
-                  }
-                  placeholder="Complete 5 tasks, Submit proof"
-                  className="w-full bg-stone-800 border border-amber-500/30 rounded-lg p-3 text-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                />
-              </div>
-              <div className="flex justify-end space-x-3">
+        <div
+          className="fixed inset-0 z-50 overflow-y-auto overscroll-y-contain bg-black/80 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="propose-challenge-title"
+        >
+          <div
+            className="min-h-full flex items-start justify-center p-4 py-6 sm:py-10"
+            onClick={() => setShowCreateModal(false)}
+          >
+            <div
+              className="relative flex w-full max-w-md max-h-[min(90vh,720px)] flex-col rounded-2xl border border-amber-500/30 bg-stone-900 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex shrink-0 items-center gap-3 border-b border-amber-500/20 px-4 py-3 sm:px-5">
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 rounded-lg border border-amber-500/30 text-amber-300 hover:bg-stone-800"
+                  className="text-amber-300 hover:text-amber-200 text-sm font-medium shrink-0"
                 >
-                  Cancel
+                  ← Back
                 </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-lg bg-gold-gradient text-black font-semibold hover:opacity-90"
+                <h2
+                  id="propose-challenge-title"
+                  className="flex-1 text-center text-lg sm:text-xl font-bold text-amber-300 truncate"
                 >
-                  Create Challenge
+                  Propose Challenge
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="shrink-0 rounded-lg p-2 text-amber-400 hover:bg-stone-800 hover:text-amber-200"
+                  aria-label="Close"
+                >
+                  <X className="h-5 w-5" />
                 </button>
               </div>
-            </form>
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4 pt-3 sm:px-5 sm:pb-5 sm:pt-4">
+                <form onSubmit={handleCreateChallenge} className="space-y-4">
+                  <div>
+                    <label className="block text-amber-200 mb-2 text-sm">Title *</label>
+                    <input
+                      type="text"
+                      value={newChallenge.title}
+                      onChange={(e) =>
+                        setNewChallenge({ ...newChallenge, title: e.target.value })
+                      }
+                      className="w-full bg-stone-800 border border-amber-500/30 rounded-lg p-3 text-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-amber-200 mb-2 text-sm">
+                      Description *
+                    </label>
+                    <textarea
+                      value={newChallenge.description}
+                      onChange={(e) =>
+                        setNewChallenge({
+                          ...newChallenge,
+                          description: e.target.value,
+                        })
+                      }
+                      className="w-full bg-stone-800 border border-amber-500/30 rounded-lg p-3 text-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      rows="4"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-amber-200 mb-2 text-sm">Deadline *</label>
+                    <input
+                      type="date"
+                      value={newChallenge.deadline}
+                      onChange={(e) =>
+                        setNewChallenge({
+                          ...newChallenge,
+                          deadline: e.target.value,
+                        })
+                      }
+                      className="w-full bg-stone-800 border border-amber-500/30 rounded-lg p-3 text-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-amber-200 mb-2 text-sm">
+                      Duration (days)
+                    </label>
+                    <input
+                      type="number"
+                      value={newChallenge.duration}
+                      onChange={(e) =>
+                        setNewChallenge({
+                          ...newChallenge,
+                          duration: parseInt(e.target.value, 10) || 30,
+                        })
+                      }
+                      className="w-full bg-stone-800 border border-amber-500/30 rounded-lg p-3 text-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      min="1"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-amber-200 mb-2 text-sm">
+                      Rewards (comma-separated)
+                    </label>
+                    <input
+                      type="text"
+                      value={newChallenge.rewards}
+                      onChange={(e) =>
+                        setNewChallenge({
+                          ...newChallenge,
+                          rewards: e.target.value,
+                        })
+                      }
+                      placeholder="Badge, 500 XP"
+                      className="w-full bg-stone-800 border border-amber-500/30 rounded-lg p-3 text-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-amber-200 mb-2 text-sm">
+                      Requirements (comma-separated)
+                    </label>
+                    <input
+                      type="text"
+                      value={newChallenge.requirements}
+                      onChange={(e) =>
+                        setNewChallenge({
+                          ...newChallenge,
+                          requirements: e.target.value,
+                        })
+                      }
+                      placeholder="Complete 5 tasks, Submit proof"
+                      className="w-full bg-stone-800 border border-amber-500/30 rounded-lg p-3 text-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                  <div className="flex flex-wrap justify-end gap-3 pt-2 sticky bottom-0 bg-stone-900/95 pb-1 -mx-1 px-1 border-t border-amber-500/10 sm:border-0 sm:static sm:bg-transparent sm:pb-0">
+                    <button
+                      type="button"
+                      onClick={() => setShowCreateModal(false)}
+                      className="px-4 py-2 rounded-lg border border-amber-500/30 text-amber-300 hover:bg-stone-800"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 rounded-lg bg-gold-gradient text-black font-semibold hover:opacity-90"
+                    >
+                      Create Challenge
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
           </div>
         </div>
       )}
