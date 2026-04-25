@@ -29,7 +29,16 @@ const notificationSchema = new mongoose.Schema(
     },
     relatedEntityType: {
       type: String,
-      enum: ["post", "comment", "quest", "message", "friend_request"],
+      enum: [
+        "post",
+        "comment",
+        "quest",
+        "message",
+        "friend_request",
+        "study_pod",
+        "study_session",
+        "study_material",
+      ],
     },
   },
   {
