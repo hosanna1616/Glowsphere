@@ -51,6 +51,33 @@ class UserApi {
     }
   }
 
+  async searchUsers(username) {
+    try {
+      return await apiClient.get(
+        `/auth/search?username=${encodeURIComponent(username)}`,
+        true
+      );
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async getFriends() {
+    try {
+      return await apiClient.get("/auth/friends", true);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async addFriend(username) {
+    try {
+      return await apiClient.post("/auth/friends", { username }, true);
+    } catch (error) {
+      throw error;
+    }
+  }
+
   // Check if user is authenticated
   isAuthenticated() {
     return !!apiClient.getToken();
