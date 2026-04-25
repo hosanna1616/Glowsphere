@@ -1,11 +1,34 @@
 const StudyMaterial = require("../models/StudyMaterial");
-const User = require("../models/User");
 const { uploadToCloudinary } = require("../utils/upload");
+
+const normalizeMaterial = (material) => {
+  const plain = material.toObject ? material.toObject() : material;
+  return {
+    ...plain,
+    highlights: plain.highlights || [],
+    readingProgress: plain.readingProgress || [],
+    pdfMetadata: plain.pdfMetadata || {
+      totalPages: 0,
+      extractedAt: null,
+      source: "unknown",
+      textPages: [],
+    },
+  };
+};
 
 // Create a new study material
 const createStudyMaterial = async (req, res) => {
   try {
-    const { title, description, tags, isPublic, fileType } = req.body;
+    const {
+      title,
+      description,
+      tags,
+      isPublic,
+      fileType,
+      pages,
+      pdfMetadata,
+      originalFileName,
+    } = req.body;
     let fileUrl = "";
 
     // Handle file upload if present
@@ -20,12 +43,15 @@ const createStudyMaterial = async (req, res) => {
       description,
       fileUrl,
       fileType,
-      tags,
+      tags: Array.isArray(tags) ? tags : [],
       isPublic: isPublic || false,
+      pages: Array.isArray(pages) ? pages : [],
+      originalFileName: originalFileName || req.file?.originalname || "",
+      pdfMetadata: pdfMetadata || undefined,
     });
 
     const createdStudyMaterial = await studyMaterial.save();
-    res.status(201).json(createdStudyMaterial);
+    res.status(201).json(normalizeMaterial(createdStudyMaterial));
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -39,7 +65,7 @@ const getStudyMaterials = async (req, res) => {
       $or: [{ userId: req.user._id }, { isPublic: true }],
     }).sort({ createdAt: -1 });
 
-    res.json(studyMaterials);
+    res.json(studyMaterials.map(normalizeMaterial));
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -65,7 +91,7 @@ const getStudyMaterialById = async (req, res) => {
       studyMaterial.views += 1;
       await studyMaterial.save();
 
-      res.json(studyMaterial);
+      res.json(normalizeMaterial(studyMaterial));
     } else {
       res.status(404).json({ message: "Study material not found" });
     }
@@ -77,7 +103,15 @@ const getStudyMaterialById = async (req, res) => {
 // Update study material
 const updateStudyMaterial = async (req, res) => {
   try {
-    const { title, description, tags, isPublic } = req.body;
+    const {
+      title,
+      description,
+      tags,
+      isPublic,
+      pages,
+      pdfMetadata,
+      originalFileName,
+    } = req.body;
 
     const studyMaterial = await StudyMaterial.findById(req.params.id);
 
@@ -94,9 +128,21 @@ const updateStudyMaterial = async (req, res) => {
       studyMaterial.tags = tags || studyMaterial.tags;
       studyMaterial.isPublic =
         isPublic !== undefined ? isPublic : studyMaterial.isPublic;
+      if (pages !== undefined) {
+        studyMaterial.pages = pages;
+      }
+      if (pdfMetadata !== undefined) {
+        studyMaterial.pdfMetadata = {
+          ...studyMaterial.pdfMetadata?.toObject?.(),
+          ...pdfMetadata,
+        };
+      }
+      if (originalFileName !== undefined) {
+        studyMaterial.originalFileName = originalFileName;
+      }
 
       const updatedStudyMaterial = await studyMaterial.save();
-      res.json(updatedStudyMaterial);
+      res.json(normalizeMaterial(updatedStudyMaterial));
     } else {
       res.status(404).json({ message: "Study material not found" });
     }
@@ -131,7 +177,7 @@ const deleteStudyMaterial = async (req, res) => {
 // Add highlight to study material
 const addHighlight = async (req, res) => {
   try {
-    const { text, color, position } = req.body;
+    const { text, color, position, pageNumber, pageLabel, note } = req.body;
 
     const studyMaterial = await StudyMaterial.findById(req.params.id);
 
@@ -146,9 +192,13 @@ const addHighlight = async (req, res) => {
       }
 
       const highlight = {
+        userId: req.user._id,
         text,
         color: color || "#FFD700",
         position,
+        pageNumber: Number(pageNumber) || 1,
+        pageLabel: pageLabel || "",
+        note: note || "",
       };
 
       studyMaterial.highlights.push(highlight);
