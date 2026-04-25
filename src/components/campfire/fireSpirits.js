@@ -42,7 +42,7 @@ export const FIRE_SPIRITS = [
   },
 ].map((spirit) => ({
   ...spirit,
-  iconImage: "/glowsphere-logo.png",
+  iconImage: "/glowsphere-logo.svg",
 }));
 
 export const FIRE_SPIRIT_BY_NAME = FIRE_SPIRITS.reduce((acc, spirit) => {

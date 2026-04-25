@@ -429,7 +429,7 @@ const EnhancedCampfire = () => {
                     alt={spirit.actorName}
                     onError={(e) => {
                       e.currentTarget.onerror = null;
-                      e.currentTarget.src = spirit.fallbackImage || "/glowsphere-logo.png";
+                      e.currentTarget.src = spirit.fallbackImage || "/glowsphere-logo.svg";
                     }}
                     className="w-12 h-12 rounded-full object-cover border-2 border-amber-300 shadow-[0_0_18px_rgba(251,191,36,0.7)] mx-auto"
                   />

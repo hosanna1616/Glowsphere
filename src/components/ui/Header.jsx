@@ -76,7 +76,7 @@ const Header = () => {
     <header className="relative z-[70] overflow-visible p-4 md:p-6 flex justify-between items-center border-b border-amber-500/30 md:ml-20 lg:ml-64 transition-all duration-300 w-full max-w-full">
       <div className="flex items-center gap-2 md:gap-3 min-w-0">
         <img
-          src="/glowsphere-logo.png"
+          src="/glowsphere-logo.svg"
           alt="GlowSphere logo"
           className="h-8 w-8 md:h-10 md:w-10 rounded-full object-cover shadow-[0_0_18px_rgba(245,158,11,0.45)]"
         />

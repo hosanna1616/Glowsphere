@@ -73,7 +73,7 @@ const Sidebar = () => {
           <div className="mb-8 mt-4">
             <div className="flex items-center gap-3">
               <img
-                src="/glowsphere-logo.png"
+                src="/glowsphere-logo.svg"
                 alt="GlowSphere logo"
                 className="h-9 w-9 rounded-full object-cover shadow-[0_0_18px_rgba(245,158,11,0.45)]"
               />
@@ -134,7 +134,7 @@ const Sidebar = () => {
           <div className="mb-4 mt-16 px-2">
             <div className="flex flex-col items-center gap-2">
               <img
-                src="/glowsphere-logo.png"
+                src="/glowsphere-logo.svg"
                 alt="GlowSphere logo"
                 className="h-8 w-8 md:h-10 md:w-10 rounded-full object-cover shadow-[0_0_16px_rgba(245,158,11,0.45)]"
               />
