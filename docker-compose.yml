@@ -1,32 +1,46 @@
-version: "3.8"
-
 services:
-  # MongoDB Database
   mongodb:
-    image: mongo:5.0
-    container_name: glowsphere_mongodb
+    image: mongo:7
+    container_name: glow_mongodb
     restart: unless-stopped
     ports:
-      - "27017:27017"
+      - "${MONGO_PORT:-27017}:27017"
+    environment:
+      MONGO_INITDB_DATABASE: ${MONGO_DB_NAME:-glowsphere}
     volumes:
       - mongodb_data:/data/db
     healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 20s
 
-  # Backend API
-  backend:
-    build: ./backend
-    container_name: glowsphere_backend
+  mongo-express:
+    image: mongo-express:1.0.2
+    container_name: glow_mongo_express
     restart: unless-stopped
     ports:
-      - "5000:5000"
+      - "${MONGO_EXPRESS_PORT:-8081}:8081"
     environment:
-      NODE_ENV: development
-      MONGODB_URI: mongodb://mongodb:27017/glowsphere
-      JWT_SECRET: glowsphere_jwt_secret_key_2023
+      ME_CONFIG_MONGODB_URL: mongodb://mongodb:27017/${MONGO_DB_NAME:-glowsphere}
+      ME_CONFIG_BASICAUTH: "false"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+  backend:
+    build: ./backend
+    container_name: glow_backend
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-5002}:5002"
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      HOST: 0.0.0.0
+      PORT: 5002
+      MONGODB_URI: ${MONGODB_URI:-mongodb://mongodb:27017/glowsphere}
+      JWT_SECRET: ${JWT_SECRET:-glow_local_jwt_secret_change_me}
       CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
       CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
       CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
@@ -36,24 +50,26 @@ services:
     volumes:
       - ./backend:/app
       - /app/node_modules
+      - backend_uploads:/app/uploads
     command: npm run dev
 
-  # Frontend (Vite development server)
   frontend:
     build:
       context: .
       dockerfile: Dockerfile.frontend
-    container_name: glowsphere_frontend
-    restart: always
+    container_name: glow_frontend
+    restart: unless-stopped
     ports:
-      - "5173:5173"
+      - "${FRONTEND_PORT:-5173}:5173"
     environment:
-      - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:5002/api}
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:5002/api}
+    depends_on:
+      - backend
     volumes:
       - .:/app
       - /app/node_modules
-    depends_on:
-      - backend
+    command: npm run dev -- --host 0.0.0.0
 
 volumes:
   mongodb_data:
+  backend_uploads:
