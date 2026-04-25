@@ -11,6 +11,7 @@ const {
   getRoomMessages,
   sendTextMessage,
   sendVoiceMessage,
+  deleteMessage,
   inviteUser,
   updateRoomSettings,
 } = require("../controllers/campfireController");
@@ -47,5 +48,8 @@ router.route("/rooms/:id/messages/text").post(auth, sendTextMessage);
 router
   .route("/rooms/:id/messages/voice")
   .post(auth, upload.single("voice"), sendVoiceMessage);
+router
+  .route("/rooms/:id/messages/:messageId/delete")
+  .post(auth, deleteMessage);
 
 module.exports = router;

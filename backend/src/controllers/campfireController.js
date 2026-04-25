@@ -3,10 +3,19 @@ const Message = require("../models/Message");
 const User = require("../models/User");
 const { uploadToCloudinary } = require("../utils/upload");
 
+const getPrimaryFireSpirit = (user) => {
+  if (Array.isArray(user.fireSpirits) && user.fireSpirits.length > 0) {
+    return user.fireSpirits[0];
+  }
+  return null;
+};
+
 // Create a new room
 const createRoom = async (req, res) => {
   try {
     const { name, maxParticipants } = req.body;
+    const userWithSpirits = await User.findById(req.user._id).select("fireSpirits");
+    const primarySpirit = getPrimaryFireSpirit(userWithSpirits || {});
 
     const room = new Room({
       name,
@@ -20,6 +29,8 @@ const createRoom = async (req, res) => {
           isHost: true,
           isAudioOn: true,
           isVideoOn: true,
+          fireSpiritName: primarySpirit?.spiritName || "",
+          fireSpiritActorImage: primarySpirit?.actorImage || "",
         },
       ],
     });
@@ -61,6 +72,8 @@ const getRoomById = async (req, res) => {
 const joinRoom = async (req, res) => {
   try {
     const room = await Room.findById(req.params.id);
+    const userWithSpirits = await User.findById(req.user._id).select("fireSpirits");
+    const primarySpirit = getPrimaryFireSpirit(userWithSpirits || {});
 
     if (room && room.isActive) {
       // Check if user is already in the room
@@ -70,7 +83,7 @@ const joinRoom = async (req, res) => {
       );
 
       if (isAlreadyParticipant) {
-        return res.status(400).json({ message: "User is already in the room" });
+        return res.json(room);
       }
 
       // Check if room is full
@@ -85,6 +98,8 @@ const joinRoom = async (req, res) => {
         isHost: false,
         isAudioOn: true,
         isVideoOn: true,
+        fireSpiritName: primarySpirit?.spiritName || "",
+        fireSpiritActorImage: primarySpirit?.actorImage || "",
       });
 
       const updatedRoom = await room.save();
@@ -208,9 +223,11 @@ const toggleParticipantVideo = async (req, res) => {
 // Get room messages
 const getRoomMessages = async (req, res) => {
   try {
-    const messages = await Message.find({ roomId: req.params.id }).sort({
-      timestamp: 1,
-    });
+    const messages = await Message.find({
+      roomId: req.params.id,
+      deletedForEveryone: false,
+      deletedFor: { $ne: req.user._id },
+    }).sort({ timestamp: 1 });
 
     res.json(messages);
   } catch (error) {
@@ -273,6 +290,78 @@ const sendVoiceMessage = async (req, res) => {
   }
 };
 
+// Delete message
+const deleteMessage = async (req, res) => {
+  try {
+    const { deleteType } = req.body;
+    const normalizedDeleteType = deleteType === "everyone" ? "everyone" : "me";
+    const room = await Room.findById(req.params.id);
+    if (!room || !room.isActive) {
+      return res.status(404).json({ message: "Room not found or inactive" });
+    }
+
+    const isParticipant = room.participants.some(
+      (participant) => participant.userId.toString() === req.user._id.toString()
+    );
+    if (!isParticipant) {
+      return res.status(401).json({ message: "Not authorized in this room" });
+    }
+
+    const message = await Message.findOne({
+      _id: req.params.messageId,
+      roomId: req.params.id,
+    });
+    if (!message) {
+      return res.status(404).json({ message: "Message not found" });
+    }
+
+    if (normalizedDeleteType === "me") {
+      const isDeletedForUser = message.deletedFor.some(
+        (entry) => entry.toString() === req.user._id.toString()
+      );
+      if (!isDeletedForUser) {
+        message.deletedFor.push(req.user._id);
+        await message.save();
+      }
+      return res.json({
+        message: "Message deleted for you",
+        messageId: message._id,
+        deleteType: "me",
+      });
+    }
+
+    const isHost = room.participants.some(
+      (participant) =>
+        participant.userId.toString() === req.user._id.toString() &&
+        participant.isHost === true
+    );
+    const isSender = message.userId.toString() === req.user._id.toString();
+
+    if (!isSender && !isHost) {
+      return res.status(401).json({
+        message: "Only message sender or room host can delete for everyone",
+      });
+    }
+
+    message.deletedForEveryone = true;
+    message.deletedBy = req.user._id;
+    message.deletedAt = new Date();
+    message.text = "This message was deleted";
+    message.isVoice = false;
+    message.voiceUrl = "";
+    message.duration = 0;
+    await message.save();
+
+    return res.json({
+      message: "Message deleted for everyone",
+      messageId: message._id,
+      deleteType: "everyone",
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // Invite user to room
 const inviteUser = async (req, res) => {
   try {
@@ -295,7 +384,9 @@ const inviteUser = async (req, res) => {
     }
 
     // Find user by username
-    const userToInvite = await User.findOne({ username: username.toLowerCase() });
+    const userToInvite = await User.findOne({
+      username: { $regex: `^${username.trim()}$`, $options: "i" },
+    });
 
     if (!userToInvite) {
       return res.status(404).json({ message: "User not found" });
@@ -322,6 +413,9 @@ const inviteUser = async (req, res) => {
       isHost: false,
       isAudioOn: true,
       isVideoOn: true,
+      fireSpiritName: getPrimaryFireSpirit(userToInvite || {})?.spiritName || "",
+      fireSpiritActorImage:
+        getPrimaryFireSpirit(userToInvite || {})?.actorImage || "",
     });
 
     const updatedRoom = await room.save();
@@ -378,6 +472,7 @@ module.exports = {
   getRoomMessages,
   sendTextMessage,
   sendVoiceMessage,
+  deleteMessage,
   inviteUser,
   updateRoomSettings,
 };

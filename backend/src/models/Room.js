@@ -25,6 +25,14 @@ const participantSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  fireSpiritName: {
+    type: String,
+    default: "",
+  },
+  fireSpiritActorImage: {
+    type: String,
+    default: "",
+  },
 });
 
 const roomSchema = new mongoose.Schema(

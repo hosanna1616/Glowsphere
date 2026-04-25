@@ -95,6 +95,18 @@ class CampfireApi {
     }
   }
 
+  async deleteMessage(roomId, messageId, deleteType = "me") {
+    try {
+      return await apiClient.post(
+        `/campfire/rooms/${roomId}/messages/${messageId}/delete`,
+        { deleteType },
+        true
+      );
+    } catch (error) {
+      throw error;
+    }
+  }
+
   // Send voice message
   async sendVoiceMessage(roomId, voiceData) {
     try {
