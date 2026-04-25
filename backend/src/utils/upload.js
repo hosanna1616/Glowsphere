@@ -1,6 +1,14 @@
 const cloudinary = require("cloudinary").v2;
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
+
+const uploadsDir = path.resolve(__dirname, "../../uploads");
+
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
 
 // Configure Cloudinary
 cloudinary.config({
@@ -9,18 +17,39 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
+const hasCloudinaryConfig =
+  Boolean(process.env.CLOUDINARY_CLOUD_NAME) &&
+  Boolean(process.env.CLOUDINARY_API_KEY) &&
+  Boolean(process.env.CLOUDINARY_API_SECRET);
+
+const localStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadsDir);
+  },
+  filename: function (req, file, cb) {
+    const extension = path.extname(file.originalname || "");
+    const baseName = path
+      .basename(file.originalname || "upload", extension)
+      .replace(/[^a-zA-Z0-9-_]/g, "-");
+    cb(null, `${Date.now()}-${baseName}${extension}`);
+  },
+});
+
 // Create Cloudinary storage
-const storage = new CloudinaryStorage({
+const cloudinaryStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
     folder: "glowsphere",
-    allowed_formats: ["jpg", "png", "jpeg", "mp4", "mov", "pdf"],
+    allowed_formats: ["jpg", "png", "jpeg", "mp4", "mov", "pdf", "webm"],
     transformation: [{ width: 1200, height: 1200, crop: "limit" }],
   },
 });
 
+const storage = hasCloudinaryConfig ? cloudinaryStorage : localStorage;
+
 // Create multer instance
 const upload = multer({ storage: storage });
+const profileUpload = multer({ storage: localStorage });
 
 // Upload file to Cloudinary
 const uploadToCloudinary = async (file) => {
@@ -66,6 +95,7 @@ const deleteFromCloudinary = async (publicId) => {
 
 module.exports = {
   upload,
+  profileUpload,
   uploadToCloudinary,
   deleteFromCloudinary,
 };
