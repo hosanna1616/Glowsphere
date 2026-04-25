@@ -1,23 +1,92 @@
 const mongoose = require("mongoose");
 
-const highlightSchema = new mongoose.Schema({
-  text: {
-    type: String,
-    required: true,
+const highlightSchema = new mongoose.Schema(
+  {
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    text: {
+      type: String,
+      required: true,
+    },
+    color: {
+      type: String,
+      default: "#FFD700",
+    },
+    pageNumber: {
+      type: Number,
+      default: 1,
+    },
+    pageLabel: {
+      type: String,
+      default: "",
+    },
+    note: {
+      type: String,
+      default: "",
+    },
+    position: {
+      start: Number,
+      end: Number,
+    },
+    timestamp: {
+      type: Date,
+      default: Date.now,
+    },
   },
-  color: {
-    type: String,
-    default: "#FFD700",
+  { _id: true }
+);
+
+const readingProgressSchema = new mongoose.Schema(
+  {
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    lastPageRead: {
+      type: Number,
+      default: 1,
+    },
+    pagesVisited: {
+      type: [Number],
+      default: [],
+    },
+    pagesHighlighted: {
+      type: [Number],
+      default: [],
+    },
+    coveragePercent: {
+      type: Number,
+      default: 0,
+    },
+    updatedAt: {
+      type: Date,
+      default: Date.now,
+    },
   },
-  position: {
-    start: Number,
-    end: Number,
+  { _id: false }
+);
+
+const pdfTextPageSchema = new mongoose.Schema(
+  {
+    pageNumber: {
+      type: Number,
+      required: true,
+    },
+    text: {
+      type: String,
+      default: "",
+    },
+    wordCount: {
+      type: Number,
+      default: 0,
+    },
   },
-  timestamp: {
-    type: Date,
-    default: Date.now,
-  },
-});
+  { _id: false }
+);
 
 const studyMaterialSchema = new mongoose.Schema(
   {
@@ -48,6 +117,10 @@ const studyMaterialSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    originalFileName: {
+      type: String,
+      default: "",
+    },
     pages: [
       {
         title: String,
@@ -59,6 +132,26 @@ const studyMaterialSchema = new mongoose.Schema(
       },
     ],
     highlights: [highlightSchema],
+    readingProgress: [readingProgressSchema],
+    pdfMetadata: {
+      totalPages: {
+        type: Number,
+        default: 0,
+      },
+      extractedAt: {
+        type: Date,
+        default: null,
+      },
+      source: {
+        type: String,
+        enum: ["local", "cloudinary", "external", "unknown"],
+        default: "unknown",
+      },
+      textPages: {
+        type: [pdfTextPageSchema],
+        default: [],
+      },
+    },
     tags: [
       {
         type: String,
