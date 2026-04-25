@@ -73,6 +73,32 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    glowPoints: {
+      type: Number,
+      default: 0,
+    },
+    bloomGarden: {
+      type: [String],
+      default: [],
+    },
+    fireSpirits: [
+      {
+        spiritName: { type: String, required: true },
+        actorName: { type: String, default: "" },
+        actorImage: { type: String, default: "" },
+        iconImage: { type: String, default: "" },
+      },
+    ],
+    emberCrownUntil: {
+      type: Date,
+      default: null,
+    },
+    friends: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
   },
   {
     timestamps: true,
