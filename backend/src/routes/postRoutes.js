@@ -10,6 +10,9 @@ const {
   addComment,
   deleteComment,
   savePost,
+  reportPost,
+  getReportedPosts,
+  updateReportStatus,
 } = require("../controllers/postController");
 const auth = require("../middleware/auth");
 
@@ -35,11 +38,16 @@ router
 router
   .route("/:id")
   .get(auth, getPostById)
-  .put(auth, updatePost)
+  .put(auth, upload.single("media"), updatePost)
   .delete(auth, deletePost);
 
 router.route("/:id/like").put(auth, likePost);
 router.route("/:id/save").post(auth, savePost);
+router.route("/:id/report").post(auth, reportPost);
+router.route("/reports/queue").get(auth, getReportedPosts);
+router
+  .route("/reports/:postId/:reportId/status")
+  .put(auth, updateReportStatus);
 router.route("/:id/comments").post(auth, addComment);
 router.route("/:postId/comments/:commentId").delete(auth, deleteComment);
 
