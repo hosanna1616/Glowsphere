@@ -42,10 +42,6 @@ class ApiClient {
       });
 
       if (!response.ok) {
-        if (response.status === 401) {
-          this.removeToken();
-          throw new Error("Authentication required. Please log in again.");
-        }
         const errorText = await response.text();
         let errorMessage = `Request failed (${response.status})`;
         try {
@@ -54,6 +50,16 @@ class ApiClient {
         } catch {
           errorMessage = errorText || errorMessage;
         }
+        
+        // For 401 on protected endpoints (not auth endpoints), remove token
+        if (response.status === 401) {
+          const isAuthEndpoint = endpoint.includes('/auth/login') || endpoint.includes('/auth/register');
+          if (!isAuthEndpoint) {
+            this.removeToken();
+            throw new Error("Authentication required. Please log in again.");
+          }
+        }
+        
         throw new Error(errorMessage);
       }
 
@@ -82,10 +88,6 @@ class ApiClient {
       });
 
       if (!response.ok) {
-        if (response.status === 401) {
-          this.removeToken();
-          throw new Error("Authentication required. Please log in again.");
-        }
         const errorText = await response.text();
         let errorMessage = `Request failed (${response.status})`;
         try {
@@ -94,6 +96,17 @@ class ApiClient {
         } catch {
           errorMessage = errorText || errorMessage;
         }
+        
+        // For 401 on protected endpoints (not auth endpoints), remove token
+        if (response.status === 401) {
+          const isAuthEndpoint = endpoint.includes('/auth/login') || endpoint.includes('/auth/register');
+          if (!isAuthEndpoint) {
+            this.removeToken();
+            throw new Error("Authentication required. Please log in again.");
+          }
+          // For login/register endpoints, use the backend's specific error message
+        }
+        
         throw new Error(errorMessage);
       }
 
@@ -127,10 +140,22 @@ class ApiClient {
       });
 
       if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = `Request failed (${response.status})`;
+        try {
+          const errorJson = JSON.parse(errorText);
+          errorMessage = errorJson.message || errorMessage;
+        } catch {
+          errorMessage = errorText || errorMessage;
+        }
+        
+        // For 401 on protected endpoints, remove token
         if (response.status === 401) {
           this.removeToken();
+          throw new Error("Authentication required. Please log in again.");
         }
-        throw new Error(`HTTP error! status: ${response.status}`);
+        
+        throw new Error(errorMessage);
       }
 
       return await response.json();
@@ -148,10 +173,22 @@ class ApiClient {
       });
 
       if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = `Request failed (${response.status})`;
+        try {
+          const errorJson = JSON.parse(errorText);
+          errorMessage = errorJson.message || errorMessage;
+        } catch {
+          errorMessage = errorText || errorMessage;
+        }
+        
+        // For 401 on protected endpoints, remove token
         if (response.status === 401) {
           this.removeToken();
+          throw new Error("Authentication required. Please log in again.");
         }
-        throw new Error(`HTTP error! status: ${response.status}`);
+        
+        throw new Error(errorMessage);
       }
 
       return await response.json();
