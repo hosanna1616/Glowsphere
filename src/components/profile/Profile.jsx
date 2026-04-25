@@ -1,17 +1,21 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import UserApi from "../../api/userApi";
 import apiClient from "../../api/apiClient";
+import { resolveMediaUrl } from "../../utils/media";
 
 const Profile = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState("profile");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [saving, setSaving] = useState(false);
   const [friends, setFriends] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
+  const [viewedUser, setViewedUser] = useState(null);
 
   const { user, logout, setUser } = useAuth();
 
@@ -22,14 +26,41 @@ const Profile = () => {
     bio: user?.bio || "",
     location: user?.location || "",
     avatar: user?.avatar || "",
+    fireSpirits: user?.fireSpirits || [],
+    glowPoints: user?.glowPoints || 0,
+    bloomGarden: user?.bloomGarden || [],
+    emberCrownUntil: user?.emberCrownUntil || null,
   });
-  const [avatarPreview, setAvatarPreview] = useState(user?.avatar || "");
+  const [avatarPreview, setAvatarPreview] = useState(
+    resolveMediaUrl(user?.avatar || ""),
+  );
   const [avatarFile, setAvatarFile] = useState(null);
+  const queryUsername = new URLSearchParams(location.search)
+    .get("username")
+    ?.trim()
+    .toLowerCase();
+  const isViewingOtherProfile =
+    !!queryUsername && queryUsername !== String(user?.username || "").toLowerCase();
 
   // Load user data on component mount
   useEffect(() => {
     const loadUserData = async () => {
       try {
+        if (isViewingOtherProfile) {
+          const results = await UserApi.searchUsers(queryUsername);
+          const exact = (results || []).find(
+            (u) => String(u.username || "").toLowerCase() === queryUsername
+          );
+          if (exact) {
+            setViewedUser(exact);
+            setAvatarPreview(resolveMediaUrl(exact.avatar || ""));
+          } else {
+            setViewedUser(null);
+            setError("User profile not found");
+          }
+          return;
+        }
+
         // Load user profile from API
         const userProfile = await UserApi.getCurrentUser();
         if (userProfile) {
@@ -40,8 +71,13 @@ const Profile = () => {
             bio: userProfile.bio || profileData.bio,
             location: userProfile.location || profileData.location,
             avatar: userProfile.avatar || profileData.avatar,
+            fireSpirits: userProfile.fireSpirits || profileData.fireSpirits,
+            glowPoints: userProfile.glowPoints ?? profileData.glowPoints,
+            bloomGarden: userProfile.bloomGarden || profileData.bloomGarden,
+            emberCrownUntil:
+              userProfile.emberCrownUntil ?? profileData.emberCrownUntil,
           });
-          setAvatarPreview(userProfile.avatar || "");
+          setAvatarPreview(resolveMediaUrl(userProfile.avatar || ""));
         }
       } catch (error) {
         console.error("Failed to load user data:", error);
@@ -49,7 +85,7 @@ const Profile = () => {
     };
 
     loadUserData();
-  }, []);
+  }, [isViewingOtherProfile, queryUsername]);
 
   const handleAvatarChange = (e) => {
     const file = e.target.files[0];
@@ -78,16 +114,18 @@ const Profile = () => {
     e.preventDefault();
     setError("");
     setSuccess("");
+    setSaving(true);
 
     try {
       const token = apiClient.getToken();
       if (!token) {
         setError("Please log in to update your profile");
+        setSaving(false);
         return;
       }
 
       let response;
-      
+
       // If avatar file is selected, use FormData
       if (avatarFile) {
         const formData = new FormData();
@@ -97,6 +135,13 @@ const Profile = () => {
         formData.append("email", profileData.email);
         formData.append("bio", profileData.bio || "");
         formData.append("location", profileData.location || "");
+        formData.append("glowPoints", profileData.glowPoints || 0);
+        formData.append("bloomGarden", JSON.stringify(profileData.bloomGarden || []));
+        formData.append("fireSpirits", JSON.stringify(profileData.fireSpirits || []));
+        formData.append(
+          "emberCrownUntil",
+          profileData.emberCrownUntil || "",
+        );
 
         response = await fetch(`${apiClient.getApiBaseUrl()}/auth/profile`, {
           method: "PUT",
@@ -119,67 +164,60 @@ const Profile = () => {
       }
 
       if (!response.ok) {
-        // If backend is not available, update localStorage as fallback
-        if (
-          response.status === 500 ||
-          response.status === 503 ||
-          response.status === 0
-        ) {
-          // Update localStorage
-          const storedUser = localStorage.getItem("user");
-          if (storedUser) {
-            const user = JSON.parse(storedUser);
-            const updatedUser = { ...user, ...profileData };
-            localStorage.setItem("user", JSON.stringify(updatedUser));
-            // Update auth context
-            setUser(updatedUser);
-            setSuccess("Profile updated successfully (offline mode)!");
-            // Hide success message after 3 seconds
-            setTimeout(() => setSuccess(""), 3000);
-            return;
-          }
+        let backendMessage = "";
+        try {
+          const errorData = await response.json();
+          backendMessage = errorData?.message || "";
+        } catch (parseError) {
+          backendMessage = "";
         }
-        throw new Error(`HTTP error! status: ${response.status}`);
+
+        throw new Error(
+          backendMessage || `HTTP error! status: ${response.status}`,
+        );
       }
 
       const updatedUser = await response.json();
+      const normalizedUser = {
+        ...updatedUser,
+        avatar: updatedUser.avatar || "",
+      };
 
       // Update auth context
-      setUser(updatedUser);
+      setUser(normalizedUser);
+      setProfileData((prev) => ({
+        ...prev,
+        name: normalizedUser.name || "",
+        username: normalizedUser.username || "",
+        email: normalizedUser.email || "",
+        bio: normalizedUser.bio || "",
+        location: normalizedUser.location || "",
+        avatar: normalizedUser.avatar || "",
+        fireSpirits: normalizedUser.fireSpirits || [],
+        glowPoints: normalizedUser.glowPoints ?? 0,
+        bloomGarden: normalizedUser.bloomGarden || [],
+        emberCrownUntil: normalizedUser.emberCrownUntil || null,
+      }));
+      setAvatarPreview(resolveMediaUrl(normalizedUser.avatar || ""));
       setAvatarFile(null); // Clear file after successful upload
       setSuccess("Profile updated successfully!");
 
       // Hide success message after 3 seconds
       setTimeout(() => setSuccess(""), 3000);
     } catch (error) {
-      // Fallback to localStorage if network error
-      if (error instanceof TypeError && error.message.includes("fetch")) {
-        try {
-          // Update localStorage
-          const storedUser = localStorage.getItem("user");
-          if (storedUser) {
-            const user = JSON.parse(storedUser);
-            const updatedUser = { ...user, ...profileData };
-            localStorage.setItem("user", JSON.stringify(updatedUser));
-            // Update auth context
-            setUser(updatedUser);
-            setSuccess("Profile updated successfully (offline mode)!");
-            // Hide success message after 3 seconds
-            setTimeout(() => setSuccess(""), 3000);
-            return;
-          }
-        } catch (storageError) {
-          console.error("Failed to update localStorage:", storageError);
-        }
-      }
-
       if (error.message && error.message.includes("duplicate key")) {
         setError(
-          "This username or email is already taken. Please choose another one."
+          "This username or email is already taken. Please choose another one.",
         );
+      } else if (error.message && error.message.includes("already taken")) {
+        setError(error.message);
       } else {
-        setError("Failed to update profile. Please try again.");
+        setError(
+          error.message || "Failed to update profile. Please try again.",
+        );
       }
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -192,8 +230,38 @@ const Profile = () => {
         >
           ←
         </button>
-        <h1 className="text-3xl font-bold text-amber-400">Your Profile</h1>
+        <h1 className="text-3xl font-bold text-amber-400">
+          {isViewingOtherProfile ? "Profile" : "Your Profile"}
+        </h1>
       </div>
+
+      {isViewingOtherProfile && (
+        <div className="bg-card-bg backdrop-blur-sm rounded-xl border border-amber-500/30 p-8 text-center">
+          <div className="w-24 h-24 mx-auto rounded-full bg-gold-gradient p-0.5 mb-4">
+            <div className="w-full h-full rounded-full bg-black overflow-hidden flex items-center justify-center">
+              {avatarPreview ? (
+                <img
+                  src={avatarPreview}
+                  alt={viewedUser?.name || viewedUser?.username || "Profile"}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span className="text-amber-300 text-2xl font-bold">
+                  {(viewedUser?.name || viewedUser?.username || "U")
+                    .charAt(0)
+                    .toUpperCase()}
+                </span>
+              )}
+            </div>
+          </div>
+          <h2 className="text-2xl font-bold text-amber-200">
+            {viewedUser?.name || "Unknown User"}
+          </h2>
+          <p className="text-amber-300/80 mt-1">@{viewedUser?.username || queryUsername}</p>
+        </div>
+      )}
+
+      {!isViewingOtherProfile && (
 
       <div className="bg-card-bg backdrop-blur-sm rounded-xl border border-amber-500/30 overflow-hidden">
         {/* Profile Header */}
@@ -207,8 +275,10 @@ const Profile = () => {
                     alt={profileData.name}
                     className="w-full h-full object-cover"
                   />
+                ) : profileData.name ? (
+                  profileData.name.charAt(0)
                 ) : (
-                  profileData.name ? profileData.name.charAt(0) : "U"
+                  "U"
                 )}
               </div>
               <label className="absolute bottom-0 right-0 bg-amber-500 rounded-full p-2 cursor-pointer hover:bg-amber-600 transition-colors">
@@ -231,6 +301,15 @@ const Profile = () => {
                 <span className="bg-stone-800 px-3 py-1 rounded-full text-sm text-amber-200">
                   📍 {profileData.location}
                 </span>
+                <span className="bg-stone-800 px-3 py-1 rounded-full text-sm text-amber-200">
+                  ✨ {profileData.glowPoints || 0} Glow Points
+                </span>
+                {profileData.emberCrownUntil &&
+                  new Date(profileData.emberCrownUntil) > new Date() && (
+                    <span className="bg-amber-500/20 px-3 py-1 rounded-full text-sm text-amber-100 border border-amber-300/40">
+                      👑 Ember Crown Active
+                    </span>
+                  )}
               </div>
             </div>
           </div>
@@ -300,7 +379,9 @@ const Profile = () => {
                     onChange={(e) =>
                       setProfileData({
                         ...profileData,
-                        username: e.target.value,
+                        username: e.target.value
+                          .replace(/\s+/g, "")
+                          .toLowerCase(),
                       })
                     }
                     required
@@ -334,6 +415,38 @@ const Profile = () => {
                 </div>
               </div>
               <div className="mb-6">
+                <h3 className="text-lg font-semibold text-amber-300 mb-3">
+                  My Fire Spirits
+                </h3>
+                {profileData.fireSpirits?.length ? (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+                    {profileData.fireSpirits.map((spirit) => (
+                      <div
+                        key={spirit.spiritName}
+                        className="bg-stone-800 rounded-lg border border-amber-500/20 p-3 text-center"
+                      >
+                        <img
+                          src={spirit.actorImage || spirit.iconImage}
+                          alt={spirit.actorName || spirit.spiritName}
+                          className="w-14 h-14 rounded-full object-cover mx-auto mb-2 border border-amber-300/40"
+                        />
+                        <p className="text-amber-200 text-sm font-semibold">
+                          {spirit.spiritName}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-amber-300/80 text-sm mb-4">
+                    Choose your Fire Spirit in Campfire to see it here.
+                  </p>
+                )}
+                <h3 className="text-lg font-semibold text-amber-300 mb-2">
+                  Bloom Garden Rewards
+                </h3>
+                <p className="text-amber-200 text-sm mb-4">
+                  {(profileData.bloomGarden || []).join(", ") || "No blooms yet"}
+                </p>
                 <label className="block text-amber-200 mb-2">Bio</label>
                 <textarea
                   className="w-full bg-stone-800 border border-amber-500/30 rounded-lg p-3 text-amber-200 placeholder-amber-300/50 focus:outline-none focus:ring-2 focus:ring-amber-500"
@@ -348,9 +461,10 @@ const Profile = () => {
               <div className="flex justify-end">
                 <button
                   type="submit"
+                  disabled={saving}
                   className="bg-gold-gradient px-6 py-2 rounded-full font-semibold hover:opacity-90 transition-opacity text-black"
                 >
-                  Save Changes
+                  {saving ? "Saving..." : "Save Changes"}
                 </button>
               </div>
             </form>
@@ -444,6 +558,7 @@ const Profile = () => {
           )}
         </div>
       </div>
+      )}
     </div>
   );
 };
