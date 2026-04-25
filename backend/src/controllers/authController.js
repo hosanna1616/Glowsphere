@@ -1,5 +1,17 @@
 const jwt = require("jsonwebtoken");
+const mongoose = require("mongoose");
 const User = require("../models/User");
+
+const parseMaybeJson = (value, fallback = null) => {
+  if (typeof value !== "string") {
+    return value ?? fallback;
+  }
+  try {
+    return JSON.parse(value);
+  } catch (error) {
+    return fallback;
+  }
+};
 
 // Generate JWT token
 const generateToken = (userId) => {
@@ -15,12 +27,30 @@ const generateToken = (userId) => {
 // Register user
 const registerUser = async (req, res) => {
   try {
+    // Check if MongoDB is connected
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        message: "Database connection not ready. Please try again in a moment.",
+      });
+    }
+
     const { name, username, email, password, lastPeriod, cycleLength } =
       req.body;
 
+    // Validate input
+    if (!name || !username || !email || !password) {
+      return res.status(400).json({
+        message: "Name, username, email, and password are required",
+      });
+    }
+
+    // Normalize email and username to lowercase (matching schema)
+    const normalizedEmail = email.toLowerCase().trim();
+    const normalizedUsername = username.toLowerCase().trim();
+
     // Check if user already exists
     const userExists = await User.findOne({
-      $or: [{ email }, { username }],
+      $or: [{ email: normalizedEmail }, { username: normalizedUsername }],
     });
 
     if (userExists) {
@@ -36,11 +66,11 @@ const registerUser = async (req, res) => {
       });
     }
 
-    // Create user
+    // Create user with normalized email and username
     const user = await User.create({
-      name,
-      username,
-      email,
+      name: name.trim(),
+      username: normalizedUsername,
+      email: normalizedEmail,
       password,
       lastPeriod: new Date(lastPeriod),
       cycleLength: parseInt(cycleLength),
@@ -53,8 +83,17 @@ const registerUser = async (req, res) => {
         name: user.name,
         username: user.username,
         email: user.email,
+        avatar: user.avatar,
+        bio: user.bio,
+        location: user.location,
         lastPeriod: user.lastPeriod,
         cycleLength: user.cycleLength,
+        onboardingComplete: user.onboardingComplete,
+        glowPoints: user.glowPoints,
+        bloomGarden: user.bloomGarden,
+        fireSpirits: user.fireSpirits,
+        emberCrownUntil: user.emberCrownUntil,
+        role: user.role,
         token: generateToken(user._id),
       });
     } else {
@@ -68,32 +107,73 @@ const registerUser = async (req, res) => {
 // Authenticate user
 const authUser = async (req, res) => {
   try {
+    // Check if MongoDB is connected
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        message: "Database connection not ready. Please try again in a moment.",
+      });
+    }
+
     const { email, password } = req.body;
 
-    // Find user by email
-    const user = await User.findOne({ email });
-
-    if (user && (await user.comparePassword(password))) {
-      // Check if onboarding is complete
-      if (!user.onboardingComplete) {
-        return res.status(401).json({
-          message: "Please complete the onboarding process",
-        });
-      }
-
-      res.json({
-        _id: user._id,
-        name: user.name,
-        username: user.username,
-        email: user.email,
-        lastPeriod: user.lastPeriod,
-        cycleLength: user.cycleLength,
-        token: generateToken(user._id),
+    // Validate input
+    if (!email || !password) {
+      return res.status(400).json({
+        message: "Email and password are required",
       });
-    } else {
-      res.status(401).json({ message: "Invalid email or password" });
     }
+
+    // Normalize email to lowercase (matching schema)
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Find user by email
+    const user = await User.findOne({ email: normalizedEmail });
+
+    if (!user) {
+      return res.status(401).json({ message: "Invalid email or password" });
+    }
+
+    // Compare password
+    const isPasswordValid = await user.comparePassword(password);
+    
+    if (!isPasswordValid) {
+      return res.status(401).json({ message: "Invalid email or password" });
+    }
+
+    // Check if onboarding is complete
+    if (!user.onboardingComplete) {
+      return res.status(401).json({
+        message: "Please complete the onboarding process",
+      });
+    }
+
+    // Check if user is active
+    if (!user.isActive) {
+      return res.status(401).json({
+        message: "Your account has been deactivated. Please contact support.",
+      });
+    }
+
+    res.json({
+      _id: user._id,
+      name: user.name,
+      username: user.username,
+      email: user.email,
+      avatar: user.avatar,
+      bio: user.bio,
+      location: user.location,
+      lastPeriod: user.lastPeriod,
+      cycleLength: user.cycleLength,
+      onboardingComplete: user.onboardingComplete,
+      glowPoints: user.glowPoints,
+      bloomGarden: user.bloomGarden,
+      fireSpirits: user.fireSpirits,
+      emberCrownUntil: user.emberCrownUntil,
+      role: user.role,
+      token: generateToken(user._id),
+    });
   } catch (error) {
+    console.error("Login error:", error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -117,6 +197,11 @@ const getUserProfile = async (req, res) => {
         interests: user.interests,
         goals: user.goals,
         challenges: user.challenges,
+        glowPoints: user.glowPoints,
+        bloomGarden: user.bloomGarden,
+        fireSpirits: user.fireSpirits,
+        emberCrownUntil: user.emberCrownUntil,
+        role: user.role,
         createdAt: user.createdAt,
       });
     } else {
@@ -133,21 +218,40 @@ const updateUserProfile = async (req, res) => {
     const user = await User.findById(req.user._id);
 
     if (user) {
-      user.name = req.body.name || user.name;
-      user.username = req.body.username || user.username;
-      user.email = req.body.email || user.email;
-      user.bio = req.body.bio || user.bio;
-      user.location = req.body.location || user.location;
+      const nextName = req.body.name?.trim() || user.name;
+      const nextUsername = req.body.username?.trim().toLowerCase() || user.username;
+      const nextEmail = req.body.email?.trim().toLowerCase() || user.email;
+
+      const duplicateUser = await User.findOne({
+        _id: { $ne: user._id },
+        $or: [{ username: nextUsername }, { email: nextEmail }],
+      });
+
+      if (duplicateUser) {
+        return res.status(400).json({
+          message: "This username or email is already taken",
+        });
+      }
+
+      user.name = nextName;
+      user.username = nextUsername;
+      user.email = nextEmail;
+      user.bio = req.body.bio !== undefined ? req.body.bio : user.bio;
+      user.location =
+        req.body.location !== undefined ? req.body.location : user.location;
       
-      // Handle avatar upload if file is present
       if (req.file) {
-        const { uploadToCloudinary } = require("../utils/upload");
-        try {
-          const result = await uploadToCloudinary(req.file);
-          user.avatar = result.secure_url;
-        } catch (uploadError) {
-          // Fallback to local file URL if Cloudinary fails
+        if (req.file.secure_url) {
+          user.avatar = req.file.secure_url;
+        } else if (req.file.filename) {
           user.avatar = `/uploads/${req.file.filename}`;
+        } else if (req.file.path) {
+          const normalizedPath = req.file.path.replace(/\\/g, "/");
+          const uploadsIndex = normalizedPath.lastIndexOf("/uploads/");
+          user.avatar =
+            uploadsIndex !== -1
+              ? normalizedPath.slice(uploadsIndex)
+              : user.avatar;
         }
       } else if (req.body.avatar) {
         // If avatar is provided as URL string
@@ -163,6 +267,25 @@ const updateUserProfile = async (req, res) => {
       user.interests = req.body.interests || user.interests;
       user.goals = req.body.goals || user.goals;
       user.challenges = req.body.challenges || user.challenges;
+      if (req.body.glowPoints !== undefined) {
+        const parsedPoints = Number(req.body.glowPoints);
+        user.glowPoints = Number.isFinite(parsedPoints)
+          ? parsedPoints
+          : user.glowPoints;
+      }
+      const parsedBloomGarden = parseMaybeJson(req.body.bloomGarden);
+      if (Array.isArray(parsedBloomGarden)) {
+        user.bloomGarden = parsedBloomGarden;
+      }
+      const parsedFireSpirits = parseMaybeJson(req.body.fireSpirits);
+      if (Array.isArray(parsedFireSpirits)) {
+        user.fireSpirits = parsedFireSpirits;
+      }
+      if (req.body.emberCrownUntil !== undefined) {
+        user.emberCrownUntil = req.body.emberCrownUntil
+          ? new Date(req.body.emberCrownUntil)
+          : null;
+      }
 
       const updatedUser = await user.save();
 
@@ -179,6 +302,11 @@ const updateUserProfile = async (req, res) => {
         interests: updatedUser.interests,
         goals: updatedUser.goals,
         challenges: updatedUser.challenges,
+        glowPoints: updatedUser.glowPoints,
+        bloomGarden: updatedUser.bloomGarden,
+        fireSpirits: updatedUser.fireSpirits,
+        emberCrownUntil: updatedUser.emberCrownUntil,
+        role: updatedUser.role,
         token: generateToken(updatedUser._id),
       });
     } else {
@@ -213,10 +341,73 @@ const searchUsers = async (req, res) => {
   }
 };
 
+const getFriends = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id)
+      .populate("friends", "_id username name avatar")
+      .select("friends");
+    res.json(user?.friends || []);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+const addFriend = async (req, res) => {
+  try {
+    const { username } = req.body;
+    if (!username || !username.trim()) {
+      return res.status(400).json({ message: "Username is required" });
+    }
+    const normalized = username.trim().toLowerCase();
+    const friend = await User.findOne({ username: normalized });
+    if (!friend) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    if (friend._id.toString() === req.user._id.toString()) {
+      return res.status(400).json({ message: "You cannot add yourself as friend" });
+    }
+
+    const me = await User.findById(req.user._id);
+    if (!me) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    const alreadyFriends = me.friends.some(
+      (friendId) => friendId.toString() === friend._id.toString()
+    );
+    if (!alreadyFriends) {
+      me.friends.push(friend._id);
+      await me.save();
+    }
+
+    const reciprocal = await User.findById(friend._id);
+    const reciprocalExists = reciprocal.friends.some(
+      (friendId) => friendId.toString() === me._id.toString()
+    );
+    if (!reciprocalExists) {
+      reciprocal.friends.push(me._id);
+      await reciprocal.save();
+    }
+
+    res.json({
+      message: `@${friend.username} added as friend`,
+      friend: {
+        _id: friend._id,
+        username: friend.username,
+        name: friend.name,
+        avatar: friend.avatar,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   registerUser,
   authUser,
   getUserProfile,
   updateUserProfile,
   searchUsers,
+  getFriends,
+  addFriend,
 };
