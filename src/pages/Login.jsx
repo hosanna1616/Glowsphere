@@ -12,7 +12,7 @@ const Login = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const { login, onboardingComplete } = useAuth();
+  const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -33,19 +33,23 @@ const Login = () => {
       
       // Token is automatically saved by UserApi.login
       // Now save user data to AuthContext
+      const apiUser = response.user || response;
       login({
-        _id: response.user?._id || response.user?.id,
-        name: response.user?.name || response.user?.username || "User",
-        email: response.user?.email || formData.email,
-        username: response.user?.username || formData.email.split('@')[0],
+        _id: apiUser?._id || apiUser?.id,
+        name: apiUser?.name || apiUser?.username || "User",
+        email: apiUser?.email || formData.email,
+        username:
+          apiUser?.username ||
+          apiUser?.name?.trim().toLowerCase().replace(/\s+/g, "") ||
+          "user",
+        avatar: apiUser?.avatar || "",
+        bio: apiUser?.bio || "",
+        location: apiUser?.location || "",
+        onboardingComplete: apiUser?.onboardingComplete !== false,
       });
 
-      // Redirect based on onboarding status
-      if (onboardingComplete) {
-        navigate("/feed");
-      } else {
-        navigate("/onboarding");
-      }
+      // Existing users should go straight to the app after sign in.
+      navigate("/feed");
     } catch (err) {
       console.error("Login error:", err);
       const errorMessage = err.message || "Failed to login. Please check your credentials and try again.";
