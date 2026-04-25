@@ -11,6 +11,15 @@ const postSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    authorName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    authorAvatar: {
+      type: String,
+      default: "",
+    },
     content: {
       type: String,
       required: true,
@@ -28,6 +37,13 @@ const postSchema = new mongoose.Schema(
     tags: [
       {
         type: String,
+      },
+    ],
+    mentions: [
+      {
+        type: String,
+        lowercase: true,
+        trim: true,
       },
     ],
     likes: [
@@ -87,6 +103,44 @@ const postSchema = new mongoose.Schema(
         },
       },
     ],
+    reports: [
+      {
+        userId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+        reportCategory: {
+          type: String,
+          enum: [
+            "harmful_or_dangerous",
+            "hate_or_harassment",
+            "violence_or_threat",
+            "nudity_or_sexual",
+            "misinformation",
+            "spam_or_scam",
+            "other",
+          ],
+          default: "other",
+        },
+        reason: {
+          type: String,
+          default: "Inappropriate content",
+        },
+        additionalDetails: {
+          type: String,
+          default: "",
+        },
+        moderationStatus: {
+          type: String,
+          enum: ["pending", "under_review", "resolved", "dismissed"],
+          default: "pending",
+        },
+        reportedAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
   },
   {
     timestamps: true,
@@ -97,5 +151,7 @@ const postSchema = new mongoose.Schema(
 postSchema.index({ createdAt: -1 });
 postSchema.index({ tags: 1 });
 postSchema.index({ userId: 1 });
+postSchema.index({ "reports.userId": 1 });
+postSchema.index({ "reports.moderationStatus": 1 });
 
 module.exports = mongoose.model("Post", postSchema);
