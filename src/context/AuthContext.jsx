@@ -5,6 +5,15 @@ const AuthContext = createContext();
 export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
+  const persistUser = (userData) => {
+    setUser(userData);
+    if (userData) {
+      localStorage.setItem("user", JSON.stringify(userData));
+    } else {
+      localStorage.removeItem("user");
+    }
+  };
+
   const [onboardingComplete, setOnboardingComplete] = useState(false);
   const [onboardingData, setOnboardingData] = useState(null);
 
@@ -34,9 +43,11 @@ export const AuthProvider = ({ children }) => {
 
   const login = (userData) => {
     setIsAuthenticated(true);
-    setUser(userData);
+    persistUser(userData);
+    const isOnboardingDone = userData?.onboardingComplete !== false;
+    setOnboardingComplete(isOnboardingDone);
     localStorage.setItem("isAuthenticated", "true");
-    localStorage.setItem("user", JSON.stringify(userData));
+    localStorage.setItem("onboardingComplete", isOnboardingDone ? "true" : "false");
     // Token is already saved by UserApi.login, but we ensure it's there
     const token = localStorage.getItem("token");
     if (!token) {
@@ -81,7 +92,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     setIsAuthenticated(false);
-    setUser(null);
+    persistUser(null);
     setOnboardingComplete(false);
     setOnboardingData(null);
     localStorage.removeItem("isAuthenticated");
@@ -101,7 +112,7 @@ export const AuthProvider = ({ children }) => {
         login,
         logout,
         completeOnboarding,
-        setUser, // Expose setUser function
+        setUser: persistUser,
       }}
     >
       {children}
