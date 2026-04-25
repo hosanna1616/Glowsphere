@@ -1,8 +1,22 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { Heart, MessageCircle, Send, Bookmark, Ellipsis } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import PostsApi from "../../api/postsApi";
+import { resolveMediaUrl } from "../../utils/media";
+
+const REPORT_OPTIONS = [
+  { id: "harmful_or_dangerous", label: "Harmful or dangerous acts" },
+  { id: "hate_or_harassment", label: "Hate speech or harassment" },
+  { id: "violence_or_threat", label: "Violence or threats" },
+  { id: "nudity_or_sexual", label: "Nudity or sexual content" },
+  { id: "misinformation", label: "Misinformation" },
+  { id: "spam_or_scam", label: "Spam, fraud, or scam" },
+  { id: "other", label: "Other" },
+];
+
+const mentionRegex = /@([a-zA-Z0-9._]+)/g;
 
 const InstagramFeed = () => {
   const navigate = useNavigate();
@@ -28,15 +42,65 @@ const InstagramFeed = () => {
   const [newPostContent, setNewPostContent] = useState("");
   const [newPostMedia, setNewPostMedia] = useState(null);
   const [newPostPreview, setNewPostPreview] = useState(null);
+  const [activePostMenu, setActivePostMenu] = useState(null);
+  const [showEditPostModal, setShowEditPostModal] = useState(false);
+  const [editingPost, setEditingPost] = useState(null);
+  const [editPostContent, setEditPostContent] = useState("");
+  const [editPostMedia, setEditPostMedia] = useState(null);
+  const [editPostPreview, setEditPostPreview] = useState(null);
+  const [removeEditMedia, setRemoveEditMedia] = useState(false);
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
+  const [deletingPostId, setDeletingPostId] = useState(null);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportingPostId, setReportingPostId] = useState(null);
+  const [reportForm, setReportForm] = useState({
+    reportCategory: "harmful_or_dangerous",
+    reason: "",
+    additionalDetails: "",
+  });
+  const [hiddenReportedPosts, setHiddenReportedPosts] = useState({});
   const feedRef = useRef(null);
   const observerRef = useRef(null);
   const lastPostRef = useRef(null);
   const fileInputRef = useRef(null);
+  const editFileInputRef = useRef(null);
 
   // Get user's avatar initial
   const getUserAvatar = (username) => {
     if (!username) return "U";
     return username.charAt(0).toUpperCase();
+  };
+
+  const openMentionProfile = (username) => {
+    navigate(`/profile?username=${encodeURIComponent(username)}`);
+  };
+
+  const renderCaptionWithMentions = (text = "") => {
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+    while ((match = mentionRegex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(text.slice(lastIndex, match.index));
+      }
+      const mention = match[1];
+      parts.push(
+        <button
+          key={`${mention}-${match.index}`}
+          type="button"
+          onClick={() => openMentionProfile(mention)}
+          className="text-amber-300 hover:text-amber-200 font-medium"
+        >
+          @{mention}
+        </button>
+      );
+      lastIndex = match.index + match[0].length;
+    }
+    if (lastIndex < text.length) {
+      parts.push(text.slice(lastIndex));
+    }
+    mentionRegex.lastIndex = 0;
+    return parts.length > 0 ? parts : text;
   };
 
   // Format timestamp
@@ -67,8 +131,10 @@ const InstagramFeed = () => {
       const formattedPosts = response.posts.map((post) => ({
         id: post._id,
         username: post.username,
-        avatar: getUserAvatar(post.username),
-        imageUrl: post.mediaUrl || null,
+        displayName: post.authorName || post.username,
+        avatar: resolveMediaUrl(post.authorAvatar) || null,
+        avatarInitial: getUserAvatar(post.authorName || post.username),
+        imageUrl: resolveMediaUrl(post.mediaUrl) || null,
         caption: post.content,
         timestamp: formatTimestamp(post.createdAt),
         likes: post.likes?.length || 0,
@@ -82,6 +148,8 @@ const InstagramFeed = () => {
         mediaType: post.mediaType || "image",
         commentsList: post.comments || [],
         createdAt: post.createdAt,
+        userId: post.userId,
+        ownerId: post.userId?._id || post.userId,
       }));
 
       if (append) {
@@ -213,6 +281,18 @@ const InstagramFeed = () => {
     }
   };
 
+  const handleEditMediaSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setEditPostMedia(file);
+    setRemoveEditMedia(false);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setEditPostPreview(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
   // Create new post
   const handleCreatePost = async (e) => {
     e.preventDefault();
@@ -271,11 +351,6 @@ const InstagramFeed = () => {
     }
   };
 
-  // Load posts on mount
-  useEffect(() => {
-    loadPosts(1, false);
-  }, []);
-
   // Infinite scroll
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -306,8 +381,8 @@ const InstagramFeed = () => {
     const wasLiked = post.isLiked;
     const currentLikes = post.likes || 0;
     
-    setPosts(
-      posts.map((p) =>
+    setPosts((prev) =>
+      prev.map((p) =>
         p.id === postId
           ? {
               ...p,
@@ -321,8 +396,8 @@ const InstagramFeed = () => {
     try {
       const result = await PostsApi.likePost(postId);
       // Update with server response to ensure accuracy and persistence
-      setPosts(
-        posts.map((p) =>
+      setPosts((prev) =>
+        prev.map((p) =>
           p.id === postId
             ? {
                 ...p,
@@ -335,8 +410,8 @@ const InstagramFeed = () => {
     } catch (error) {
       console.error("Failed to like post:", error);
       // Revert on error
-      setPosts(
-        posts.map((p) =>
+      setPosts((prev) =>
+        prev.map((p) =>
           p.id === postId
             ? {
                 ...p,
@@ -466,6 +541,127 @@ const InstagramFeed = () => {
     }));
   };
 
+  const togglePostMenu = (postId) => {
+    setActivePostMenu((prev) => (prev === postId ? null : postId));
+  };
+
+  const closePostMenu = () => {
+    setActivePostMenu(null);
+  };
+
+  const requestDeletePost = (postId) => {
+    closePostMenu();
+    setDeletingPostId(postId);
+    setShowDeleteConfirmModal(true);
+  };
+
+  const handleDeletePost = async () => {
+    if (!deletingPostId) return;
+    try {
+      await PostsApi.deletePost(deletingPostId);
+      setPosts((prev) => prev.filter((post) => post.id !== deletingPostId));
+      showToast("Post deleted successfully", "success");
+      setShowDeleteConfirmModal(false);
+      setDeletingPostId(null);
+    } catch (error) {
+      const errorMessage = error.message || "Failed to delete post";
+      showToast(errorMessage, "error");
+    }
+  };
+
+  const openEditPost = (post) => {
+    closePostMenu();
+    setEditingPost(post);
+    setEditPostContent(post.caption || "");
+    setEditPostPreview(post.imageUrl || null);
+    setEditPostMedia(null);
+    setRemoveEditMedia(false);
+    if (editFileInputRef.current) {
+      editFileInputRef.current.value = "";
+    }
+    setShowEditPostModal(true);
+  };
+
+  const handleEditPost = async () => {
+    if (!editingPost) return;
+    const updatedContent = editPostContent.trim();
+    if (!updatedContent) {
+      showToast("Post content cannot be empty", "warning");
+      return;
+    }
+
+    try {
+      const updatedPost = await PostsApi.updatePost(editingPost.id, {
+        content: updatedContent,
+        removeMedia: removeEditMedia,
+      }, editPostMedia);
+      setPosts((prev) =>
+        prev.map((post) =>
+          post.id === editingPost.id
+            ? {
+                ...post,
+                caption: updatedPost.content,
+                displayName: updatedPost.authorName || post.displayName,
+                avatar: resolveMediaUrl(updatedPost.authorAvatar) || post.avatar,
+                avatarInitial: getUserAvatar(updatedPost.authorName || post.displayName),
+                imageUrl: resolveMediaUrl(updatedPost.mediaUrl) || null,
+                mediaType: updatedPost.mediaType || "image",
+              }
+            : post
+        )
+      );
+      setShowEditPostModal(false);
+      setEditingPost(null);
+      setEditPostContent("");
+      setEditPostMedia(null);
+      setEditPostPreview(null);
+      setRemoveEditMedia(false);
+      showToast("Post updated successfully", "success");
+    } catch (error) {
+      showToast(error.message || "Failed to update post", "error");
+    }
+  };
+
+  const openReportPost = (postId) => {
+    closePostMenu();
+    setReportingPostId(postId);
+    setReportForm({
+      reportCategory: "harmful_or_dangerous",
+      reason: "",
+      additionalDetails: "",
+    });
+    setShowReportModal(true);
+  };
+
+  const handleReportPost = async () => {
+    if (!reportingPostId) return;
+    try {
+      const selectedLabel =
+        REPORT_OPTIONS.find((opt) => opt.id === reportForm.reportCategory)?.label ||
+        "Other";
+      const reason =
+        reportForm.reason.trim() ||
+        `Reported for: ${selectedLabel}`;
+
+      await PostsApi.reportPost(reportingPostId, {
+        reportCategory: reportForm.reportCategory,
+        reason,
+        additionalDetails: reportForm.additionalDetails.trim(),
+      });
+      setHiddenReportedPosts((prev) => ({ ...prev, [reportingPostId]: true }));
+      setPosts((prev) => prev.filter((post) => post.id !== reportingPostId));
+      setShowReportModal(false);
+      setReportingPostId(null);
+      showToast(
+        "Report submitted. This post is now hidden from your feed while we review it.",
+        "success"
+      );
+    } catch (error) {
+      const errorMessage = error.message || "Failed to report post";
+      showToast(errorMessage, "error");
+    }
+  };
+
   return (
     <div
       className="max-w-md mx-auto bg-black min-h-screen lg:bg-transparent w-full overflow-x-hidden"
@@ -560,7 +756,9 @@ const InstagramFeed = () => {
           </div>
         ) : (
           <div className="pb-20">
-            {posts.map((post, index) => (
+            {posts
+              .filter((post) => !hiddenReportedPosts[post.id])
+              .map((post, index) => (
           <div
             key={post.id}
             ref={index === posts.length - 1 ? lastPostRef : null}
@@ -570,15 +768,30 @@ const InstagramFeed = () => {
             <div className="flex items-center justify-between px-4 py-3">
               <div className="flex items-center space-x-3">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-amber-500 to-pink-500 p-0.5">
-                  <div className="w-full h-full rounded-full bg-black flex items-center justify-center">
-                    <span className="text-amber-300 text-sm font-bold">
-                      {post.avatar}
-                    </span>
+                  <div className="w-full h-full rounded-full bg-black flex items-center justify-center overflow-hidden">
+                    {post.avatar ? (
+                      <img
+                        src={post.avatar}
+                        alt={post.displayName}
+                        className="w-full h-full object-cover"
+                        onError={() =>
+                          setPosts((prev) =>
+                            prev.map((item) =>
+                              item.id === post.id ? { ...item, avatar: null } : item
+                            )
+                          )
+                        }
+                      />
+                    ) : (
+                      <span className="text-amber-300 text-sm font-bold">
+                        {post.avatarInitial}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div>
                   <div className="text-white font-semibold text-sm">
-                    {post.username}
+                    {post.displayName}
                   </div>
                   {post.isRepost && (
                     <div className="text-amber-400 text-xs">
@@ -587,7 +800,43 @@ const InstagramFeed = () => {
                   )}
                 </div>
               </div>
-              <button className="text-white">⋯</button>
+              <div className="relative">
+                <button
+                  onClick={() => togglePostMenu(post.id)}
+                  className="text-white px-2 py-1"
+                  aria-label="Post actions"
+                >
+                  <Ellipsis className="w-5 h-5" />
+                </button>
+                {activePostMenu === post.id && (
+                  <div className="absolute right-0 mt-2 w-40 bg-stone-900 border border-amber-500/30 rounded-lg shadow-lg z-20">
+                    {post.ownerId?.toString() === user?._id?.toString() && (
+                      <button
+                        onClick={() => openEditPost(post)}
+                        className="w-full text-left px-4 py-2 text-amber-200 hover:bg-stone-800"
+                      >
+                        Edit post
+                      </button>
+                    )}
+                    {post.ownerId?.toString() === user?._id?.toString() && (
+                      <button
+                        onClick={() => requestDeletePost(post.id)}
+                        className="w-full text-left px-4 py-2 text-red-300 hover:bg-stone-800"
+                      >
+                        Delete post
+                      </button>
+                    )}
+                    {post.ownerId?.toString() !== user?._id?.toString() && (
+                      <button
+                        onClick={() => openReportPost(post.id)}
+                        className="w-full text-left px-4 py-2 text-amber-200 hover:bg-stone-800 rounded-lg"
+                      >
+                        Report post
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Post Image with Double Tap */}
@@ -622,26 +871,26 @@ const InstagramFeed = () => {
             <div className="px-4 py-3">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center space-x-4">
-                  <button onClick={() => handleLike(post.id)}>
-                    {post.isLiked ? (
-                      <span className="text-2xl">❤️</span>
-                    ) : (
-                      <span className="text-2xl">🤍</span>
-                    )}
+                  <button onClick={() => handleLike(post.id)} aria-label="Like post">
+                    <Heart
+                      className={`w-6 h-6 transition-colors ${
+                        post.isLiked ? "fill-red-500 text-red-500" : "text-white"
+                      }`}
+                    />
                   </button>
-                  <button onClick={() => toggleComments(post.id)}>
-                    <span className="text-2xl">💬</span>
+                  <button onClick={() => toggleComments(post.id)} aria-label="Comment on post">
+                    <MessageCircle className="w-6 h-6 text-white" />
                   </button>
-                  <button onClick={() => handleRepost(post)}>
-                    <span className="text-2xl">↗️</span>
+                  <button onClick={() => handleRepost(post)} aria-label="Share post">
+                    <Send className="w-6 h-6 text-white" />
                   </button>
                 </div>
-                <button onClick={() => handleSave(post.id)}>
-                  {post.isSaved ? (
-                    <span className="text-2xl">🔖</span>
-                  ) : (
-                    <span className="text-2xl">📌</span>
-                  )}
+                <button onClick={() => handleSave(post.id)} aria-label="Save post">
+                  <Bookmark
+                    className={`w-6 h-6 transition-colors ${
+                      post.isSaved ? "fill-amber-400 text-amber-400" : "text-white"
+                    }`}
+                  />
                 </button>
               </div>
 
@@ -654,10 +903,9 @@ const InstagramFeed = () => {
 
               {/* Caption */}
               <div className="mb-2">
-                <span className="text-white font-semibold text-sm mr-2">
-                  {post.username}
+                <span className="text-white text-sm break-words">
+                  {renderCaptionWithMentions(post.caption)}
                 </span>
-                <span className="text-white text-sm">{post.caption}</span>
               </div>
 
               {/* View Comments */}
@@ -774,6 +1022,191 @@ const InstagramFeed = () => {
         </div>
       )}
 
+      {showDeleteConfirmModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-stone-900 rounded-2xl p-6 max-w-md w-full border border-red-500/30">
+            <h2 className="text-2xl font-bold text-red-300 mb-3">Delete Post</h2>
+            <p className="text-amber-100/90 mb-5 leading-relaxed">
+              Delete this post permanently? This action cannot be undone.
+            </p>
+            <div className="flex space-x-3">
+              <button
+                onClick={() => {
+                  setShowDeleteConfirmModal(false);
+                  setDeletingPostId(null);
+                }}
+                className="flex-1 px-4 py-2 rounded-lg border border-amber-500/30 text-amber-300 hover:bg-stone-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeletePost}
+                className="flex-1 px-4 py-2 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-500"
+              >
+                Delete Permanently
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showReportModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-stone-900 rounded-2xl p-6 max-w-md w-full border border-amber-500/30">
+            <h2 className="text-2xl font-bold text-amber-300 mb-4">Report Post</h2>
+            <p className="text-amber-100/80 text-sm mb-4">
+              Help keep the community safe. Select the closest reason and add extra details if needed.
+            </p>
+            <div className="space-y-2 mb-4">
+              {REPORT_OPTIONS.map((option) => (
+                <label
+                  key={option.id}
+                  className="flex items-center gap-3 rounded-lg border border-amber-500/20 px-3 py-2 text-amber-100 cursor-pointer hover:bg-stone-800"
+                >
+                  <input
+                    type="radio"
+                    name="reportCategory"
+                    value={option.id}
+                    checked={reportForm.reportCategory === option.id}
+                    onChange={(e) =>
+                      setReportForm((prev) => ({
+                        ...prev,
+                        reportCategory: e.target.value,
+                      }))
+                    }
+                  />
+                  <span className="text-sm">{option.label}</span>
+                </label>
+              ))}
+            </div>
+            <textarea
+              value={reportForm.reason}
+              onChange={(e) =>
+                setReportForm((prev) => ({ ...prev, reason: e.target.value }))
+              }
+              placeholder="Short reason (optional)"
+              className="w-full bg-stone-800 border border-amber-500/30 rounded-lg p-3 text-amber-200 placeholder-amber-400 mb-3"
+              rows="2"
+            />
+            <textarea
+              value={reportForm.additionalDetails}
+              onChange={(e) =>
+                setReportForm((prev) => ({
+                  ...prev,
+                  additionalDetails: e.target.value,
+                }))
+              }
+              placeholder="Additional details (optional)"
+              className="w-full bg-stone-800 border border-amber-500/30 rounded-lg p-3 text-amber-200 placeholder-amber-400 mb-4"
+              rows="3"
+            />
+            <div className="flex space-x-3">
+              <button
+                onClick={() => {
+                  setShowReportModal(false);
+                  setReportingPostId(null);
+                }}
+                className="flex-1 px-4 py-2 rounded-lg border border-amber-500/30 text-amber-300 hover:bg-stone-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleReportPost}
+                className="flex-1 px-4 py-2 rounded-lg bg-gold-gradient text-black font-semibold hover:opacity-90"
+              >
+                Submit Report
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showEditPostModal && editingPost && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-stone-900 rounded-2xl p-6 max-w-md w-full border border-amber-500/30">
+            <h2 className="text-2xl font-bold text-amber-300 mb-4">
+              Edit Post
+            </h2>
+            {editPostPreview && (
+              <div className="mb-4">
+                {editingPost.mediaType === "video" && !editPostMedia ? (
+                  <video
+                    src={editPostPreview}
+                    className="w-full h-64 object-cover rounded-lg"
+                    controls
+                  />
+                ) : (
+                  <img
+                    src={editPostPreview}
+                    alt="Edit preview"
+                    className="w-full h-64 object-cover rounded-lg"
+                  />
+                )}
+              </div>
+            )}
+            <textarea
+              value={editPostContent}
+              onChange={(e) => setEditPostContent(e.target.value)}
+              className="w-full bg-stone-800 border border-amber-500/30 rounded-lg p-3 text-amber-200 placeholder-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500 mb-4"
+              rows="5"
+            />
+            <input
+              type="file"
+              ref={editFileInputRef}
+              onChange={handleEditMediaSelect}
+              accept="image/*,video/*"
+              className="hidden"
+            />
+            <div className="flex flex-wrap gap-2 mb-4">
+              <button
+                type="button"
+                onClick={() => editFileInputRef.current?.click()}
+                className="px-4 py-2 rounded-lg border border-amber-500/30 text-amber-300 hover:bg-stone-800"
+              >
+                Replace Photo/Video
+              </button>
+              {editPostPreview && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditPostMedia(null);
+                    setEditPostPreview(null);
+                    setRemoveEditMedia(true);
+                    if (editFileInputRef.current) {
+                      editFileInputRef.current.value = "";
+                    }
+                  }}
+                  className="px-4 py-2 rounded-lg border border-red-500/30 text-red-300 hover:bg-red-900/20"
+                >
+                  Remove Media
+                </button>
+              )}
+            </div>
+            <div className="flex space-x-3">
+              <button
+                onClick={() => {
+                  setShowEditPostModal(false);
+                  setEditingPost(null);
+                  setEditPostContent("");
+                  setEditPostMedia(null);
+                  setEditPostPreview(null);
+                  setRemoveEditMedia(false);
+                }}
+                className="flex-1 px-4 py-2 rounded-lg border border-amber-500/30 text-amber-300 hover:bg-stone-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEditPost}
+                className="flex-1 px-4 py-2 rounded-lg bg-gold-gradient text-black font-semibold hover:opacity-90"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
         {/* Create Post Modal */}
         {showCreatePost && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -794,7 +1227,7 @@ const InstagramFeed = () => {
                 <textarea
                   value={newPostContent}
                   onChange={(e) => setNewPostContent(e.target.value)}
-                  placeholder="What's on your mind?"
+                  placeholder="What's on your mind? Use @username to mention someone."
                   className="w-full bg-stone-800 border border-amber-500/30 rounded-lg p-3 text-amber-200 placeholder-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500 mb-4"
                   rows="4"
                 />
