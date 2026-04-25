@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { useStudyLock } from "../../context/StudyLockContext";
 import {
   Home,
   MessageCircle,
@@ -11,13 +12,15 @@ import {
   Lightbulb,
   Trophy,
   Users,
+  Shield,
   LogOut,
   Menu,
   X,
 } from "lucide-react";
 
 const Sidebar = () => {
-  const { isAuthenticated, logout } = useAuth();
+  const { isAuthenticated, logout, user } = useAuth();
+  const { isLocked } = useStudyLock();
   const location = useLocation();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
@@ -26,12 +29,22 @@ const Sidebar = () => {
     { name: "Feed", path: "/feed", icon: Home, shortName: "Feed" },
     { name: "Echoes", path: "/echoes", icon: MessageCircle, shortName: "Echoes" },
     { name: "Pulse", path: "/pulse", icon: Heart, shortName: "Pulse" },
-    { name: "GlowLogs", path: "/glowlogs", icon: BookOpen, shortName: "Logs" },
+    { name: "Lumina Mirror", path: "/lumina-mirror", icon: BookOpen, shortName: "Logs" },
     { name: "GlowQuest", path: "/glowquest", icon: Target, shortName: "Quest" },
     { name: "StudySuite", path: "/studysuite", icon: Lightbulb, shortName: "Study" },
     { name: "GlowChallenge", path: "/glowchallenge", icon: Trophy, shortName: "Challenge" },
     { name: "Campfire", path: "/campfire", icon: Users, shortName: "Camp" },
     { name: "Profile", path: "/profile", icon: User, shortName: "Profile" },
+    ...(user?.role === "admin"
+      ? [
+          {
+            name: "Moderation",
+            path: "/admin/moderation",
+            icon: Shield,
+            shortName: "Mod",
+          },
+        ]
+      : []),
   ];
 
   const handleLogout = () => {
@@ -58,7 +71,14 @@ const Sidebar = () => {
       <div className="fixed left-0 top-0 h-full w-64 bg-card-bg border-r border-amber-500/30 p-4 z-40 hidden lg:block">
         <div className="flex flex-col h-full">
           <div className="mb-8 mt-4">
-            <h1 className="text-2xl font-bold text-amber-400">GlowSphere</h1>
+            <div className="flex items-center gap-3">
+              <img
+                src="/glowsphere-logo.png"
+                alt="GlowSphere logo"
+                className="h-9 w-9 rounded-full object-cover shadow-[0_0_18px_rgba(245,158,11,0.45)]"
+              />
+              <h1 className="text-2xl font-bold text-amber-400">GlowSphere</h1>
+            </div>
           </div>
 
           <nav className="flex-1 overflow-y-auto">
@@ -66,19 +86,25 @@ const Sidebar = () => {
               {navItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = location.pathname === item.path;
+                const isBlocked = isLocked && item.path !== "/studysuite";
 
                 return (
                   <li key={item.path}>
                     <Link
-                      to={item.path}
+                      to={isBlocked ? "/studysuite" : item.path}
                       className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
                         isActive
                           ? "bg-amber-600 text-black font-semibold"
-                          : "text-amber-200 hover:bg-stone-800"
+                          : isBlocked
+                            ? "text-amber-100/40 hover:bg-stone-800"
+                            : "text-amber-200 hover:bg-stone-800"
                       }`}
                     >
                       <Icon size={20} />
-                      <span className="truncate">{item.name}</span>
+                      <span className="truncate">
+                        {item.name}
+                        {isBlocked ? " (Locked)" : ""}
+                      </span>
                     </Link>
                   </li>
                 );
@@ -106,9 +132,16 @@ const Sidebar = () => {
       >
         <div className="flex flex-col h-full w-20 md:w-24">
           <div className="mb-4 mt-16 px-2">
-            <h1 className="text-lg md:text-xl font-bold text-amber-400 text-center truncate">
-              Glow
-            </h1>
+            <div className="flex flex-col items-center gap-2">
+              <img
+                src="/glowsphere-logo.png"
+                alt="GlowSphere logo"
+                className="h-8 w-8 md:h-10 md:w-10 rounded-full object-cover shadow-[0_0_16px_rgba(245,158,11,0.45)]"
+              />
+              <h1 className="text-lg md:text-xl font-bold text-amber-400 text-center truncate">
+                Glow
+              </h1>
+            </div>
           </div>
 
           <nav className="flex-1 overflow-y-auto px-2">
@@ -116,16 +149,19 @@ const Sidebar = () => {
               {navItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = location.pathname === item.path;
+                const isBlocked = isLocked && item.path !== "/studysuite";
 
                 return (
                   <li key={item.path}>
                     <Link
-                      to={item.path}
+                      to={isBlocked ? "/studysuite" : item.path}
                       onClick={() => setIsMobileOpen(false)}
                       className={`flex flex-col items-center justify-center px-2 py-3 rounded-lg transition-colors group ${
                         isActive
                           ? "bg-amber-600 text-black font-semibold"
-                          : "text-amber-200 hover:bg-stone-800"
+                          : isBlocked
+                            ? "text-amber-100/40 hover:bg-stone-800"
+                            : "text-amber-200 hover:bg-stone-800"
                       }`}
                       title={item.name}
                     >
