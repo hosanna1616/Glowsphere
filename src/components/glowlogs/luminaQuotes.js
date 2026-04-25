@@ -1,0 +1,62 @@
+export const LUMINA_QUOTES = [
+  "You are not behind. You are blooming on your own timeline.",
+  "Your softness is strength, not weakness.",
+  "You glow brightest when you choose yourself.",
+  "Every small promise you keep to yourself is power.",
+  "Your voice deserves space in every room you enter.",
+  "You are allowed to outgrow old versions of yourself.",
+  "Healing is progress even when it feels quiet.",
+  "The future is already proud of the courage you showed today.",
+  "You can be gentle and unstoppable at the same time.",
+  "Your dreams are valid even before anyone understands them.",
+  "You are art in motion, not a finished product.",
+  "Rest is part of your rise.",
+  "The way you keep going is a kind of magic.",
+  "Confidence grows every time you honor your truth.",
+  "You are more than enough without proving anything.",
+  "Your kindness can coexist with clear boundaries.",
+  "You carry a light no one else can copy.",
+  "You are worthy of love that feels safe and steady.",
+  "Every chapter of you deserves tenderness.",
+  "You are becoming the woman you once wished for.",
+  "You can start over as many times as your heart needs.",
+  "Your intuition is a compass, trust it.",
+  "You are not too much; you are deeply alive.",
+  "Bravery sometimes looks like choosing peace.",
+  "Your joy is not selfish; it is sacred.",
+  "You deserve spaces where your spirit can exhale.",
+  "You are building a beautiful life one decision at a time.",
+  "Your vulnerability is a form of leadership.",
+  "You are allowed to be proud of how far you have come.",
+  "Keep the faith; your glow is unfolding.",
+  "You are a whole universe, not a single moment.",
+  "The mirror reflects your beauty, but your soul is the masterpiece.",
+  "You can rewrite the story with compassion and courage.",
+  "Your growth is valid even when it is invisible to others.",
+  "You are powerful because you choose love over fear.",
+  "Let your standards rise with your self-respect.",
+  "You carry elegance in the way you recover.",
+  "You are learning to shine without shrinking.",
+  "There is nothing ordinary about your resilience.",
+  "You deserve to be celebrated while you are still becoming.",
+  "Your future self is cheering for this exact step.",
+  "Your glow is not luck, it is self-trust.",
+  "You can hold grace and ambition in the same hand.",
+  "You are worthy of dreams that stretch your soul.",
+  "Each time you begin again, you become more radiant.",
+  "You are free to choose a life that feels like home.",
+  "Your peace is precious; protect it.",
+  "You do not need permission to be extraordinary.",
+  "Your heart knows the way forward.",
+  "You are a gentle revolution all on your own.",
+  "You bloom best when you stop doubting your light.",
+];
+
+export const getDailyQuote = () => {
+  const key = new Date().toDateString();
+  let hash = 0;
+  for (let index = 0; index < key.length; index += 1) {
+    hash = (hash + key.charCodeAt(index) * (index + 1)) % 100000;
+  }
+  return LUMINA_QUOTES[hash % LUMINA_QUOTES.length];
+};
