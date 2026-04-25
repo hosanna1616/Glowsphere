@@ -1,6 +1,20 @@
 // API service for StudySuite functionality
 import apiClient from "./apiClient";
 
+const normalizeMaterial = (material) => ({
+  ...material,
+  id: material._id || material.id,
+  fileSize: material.fileSize || 0,
+  highlights: material.highlights || [],
+  pdfMetadata: material.pdfMetadata || {
+    totalPages: 0,
+    extractedAt: null,
+    source: "unknown",
+    textPages: [],
+  },
+  readingProgress: material.readingProgress || [],
+});
+
 class StudyApi {
   // Create a new study material
   async createStudyMaterial(materialData) {
@@ -14,7 +28,8 @@ class StudyApi {
   // Get all study materials
   async getStudyMaterials() {
     try {
-      return await apiClient.get("/study", true);
+      const materials = await apiClient.get("/study", true);
+      return (materials || []).map(normalizeMaterial);
     } catch (error) {
       throw error;
     }
@@ -23,7 +38,8 @@ class StudyApi {
   // Get study material by ID
   async getStudyMaterial(id) {
     try {
-      return await apiClient.get(`/study/${id}`, true);
+      const material = await apiClient.get(`/study/${id}`, true);
+      return normalizeMaterial(material);
     } catch (error) {
       throw error;
     }
@@ -32,7 +48,8 @@ class StudyApi {
   // Update study material
   async updateStudyMaterial(id, materialData) {
     try {
-      return await apiClient.put(`/study/${id}`, materialData, true);
+      const material = await apiClient.put(`/study/${id}`, materialData, true);
+      return normalizeMaterial(material);
     } catch (error) {
       throw error;
     }
@@ -114,7 +131,7 @@ class StudyApi {
         throw new Error(errorMessage);
       }
 
-      return await response.json();
+      return normalizeMaterial(await response.json());
     } catch (error) {
       console.error("PDF upload error:", error);
       // Re-throw with better error message for network errors
@@ -159,15 +176,7 @@ class StudyApi {
       // Filter for PDFs
       return materials
         .filter((m) => m.fileType === "pdf")
-        .map((m) => ({
-          id: m._id || m.id,
-          title: m.title,
-          fileName: m.title,
-          fileSize: m.fileSize || 0,
-          fileUrl: m.fileUrl,
-          highlights: m.highlights || [],
-          uploadedAt: m.createdAt,
-        }));
+        .map((m) => normalizeMaterial(m));
     } catch (error) {
       console.error("Failed to get PDFs:", error);
       return []; // Return empty array on error
@@ -262,16 +271,19 @@ class StudyApi {
   // Add highlight to PDF
   async addPdfHighlight(pdfId, highlightData) {
     try {
-      const highlight = await this.addHighlight(pdfId, highlightData);
-      const pdf = await this.getStudyMaterial(pdfId);
-      return {
-        ...pdf,
-        highlights: pdf.highlights || [],
-      };
+      await this.addHighlight(pdfId, highlightData);
+      return this.getStudyMaterial(pdfId);
     } catch (error) {
       console.error("Failed to add PDF highlight:", error);
       throw error;
     }
+  }
+
+  async persistPdfMetadata(pdfId, pdfMetadata, originalFileName = "") {
+    return this.updateStudyMaterial(pdfId, {
+      pdfMetadata,
+      originalFileName,
+    });
   }
 
   // Update study resource (bookmark toggle)
