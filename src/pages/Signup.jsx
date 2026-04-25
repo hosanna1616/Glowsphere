@@ -25,6 +25,14 @@ const Signup = () => {
   const { showToast } = useToast();
   const navigate = useNavigate();
 
+  const buildUsernameFromName = (name) =>
+    name
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s_]/g, "")
+      .replace(/\s+/g, "")
+      .slice(0, 20) || "user";
+
   const handleChange = (e) => {
     setFormData({
       ...formData,
@@ -65,8 +73,7 @@ const Signup = () => {
     setError("");
 
     try {
-      // Generate username from email or name
-      const username = formData.email.split("@")[0] || formData.name.toLowerCase().replace(/\s+/g, "");
+      const username = buildUsernameFromName(formData.name);
       
       // Register user with backend
       const response = await UserApi.register({
@@ -86,6 +93,9 @@ const Signup = () => {
           name: response.name,
           username: response.username,
           email: response.email,
+          avatar: response.avatar || "",
+          bio: response.bio || "",
+          location: response.location || "",
         });
         
         showToast("Account created successfully! Welcome to GlowSphere! ✨", "success");
@@ -170,7 +180,7 @@ const Signup = () => {
                 value={formData.name}
                 onChange={handleChange}
                 className="w-full bg-secondary-bg border border-amber-500/30 rounded-lg p-3 text-amber-200 placeholder-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                placeholder="Alex Johnson"
+                placeholder="your name "
                 required
               />
             </div>
@@ -186,7 +196,7 @@ const Signup = () => {
                     value={formData.email}
                     onChange={handleChange}
                     className="w-full bg-secondary-bg border border-amber-500/30 rounded-lg p-3 text-amber-200 placeholder-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    placeholder="you@example.com"
+                    placeholder="youremail@example.com"
                     required
                   />
                 </div>
@@ -312,6 +322,7 @@ const Signup = () => {
               <SisterhoodQuiz
                 onComplete={handleQuizComplete}
                 onReject={handleQuizReject}
+                quizSeed={`${formData.email}|${formData.name}`}
               />
 
               {loading && (
