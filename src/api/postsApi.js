@@ -135,6 +135,99 @@ class PostsApi {
       throw error;
     }
   }
+
+  // Delete post
+  async deletePost(postId) {
+    try {
+      return await apiClient.delete(`/posts/${postId}`, true);
+    } catch (error) {
+      console.error("Failed to delete post:", error);
+      throw error;
+    }
+  }
+
+  // Update post
+  async updatePost(postId, postData, mediaFile = null) {
+    try {
+      const token = apiClient.getToken();
+      if (!token) {
+        throw new Error("Authentication required. Please log in.");
+      }
+
+      if (mediaFile || postData?.removeMedia) {
+        const formData = new FormData();
+        if (postData?.content != null) formData.append("content", postData.content);
+        if (postData?.removeMedia) formData.append("removeMedia", "true");
+        if (Array.isArray(postData?.tags)) {
+          postData.tags.forEach((tag) => formData.append("tags", tag));
+        }
+        if (mediaFile) formData.append("media", mediaFile);
+
+        const response = await fetch(`${apiClient.getApiBaseUrl()}/posts/${postId}`, {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          let errorMessage = `Failed to update post (${response.status})`;
+          try {
+            const errorJson = JSON.parse(errorText);
+            errorMessage = errorJson.message || errorMessage;
+          } catch {
+            errorMessage = errorText || errorMessage;
+          }
+          throw new Error(errorMessage);
+        }
+        return await response.json();
+      }
+
+      return await apiClient.put(`/posts/${postId}`, postData, true);
+    } catch (error) {
+      console.error("Failed to update post:", error);
+      throw error;
+    }
+  }
+
+  // Report post with moderation metadata
+  async reportPost(
+    postId,
+    {
+      reason = "Inappropriate content",
+      reportCategory = "other",
+      additionalDetails = "",
+    } = {}
+  ) {
+    try {
+      return await apiClient.post(
+        `/posts/${postId}/report`,
+        { reason, reportCategory, additionalDetails },
+        true
+      );
+    } catch (error) {
+      console.error("Failed to report post:", error);
+      throw error;
+    }
+  }
+
+  async getReportQueue({ page = 1, status = "", category = "" } = {}) {
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    if (status) params.set("status", status);
+    if (category) params.set("category", category);
+    return apiClient.get(`/posts/reports/queue?${params.toString()}`, true);
+  }
+
+  async updateReportStatus(postId, reportId, moderationStatus) {
+    return apiClient.put(
+      `/posts/reports/${postId}/${reportId}/status`,
+      { moderationStatus },
+      true
+    );
+  }
 }
 
 export default new PostsApi();
