@@ -1,6 +1,36 @@
 const Post = require("../models/Post");
 const User = require("../models/User");
 const { uploadToCloudinary } = require("../utils/upload");
+const { createNotification } = require("./notificationController");
+
+const extractMentionedUsernames = (text = "") => {
+  const mentionRegex = /@([a-zA-Z0-9._]+)/g;
+  const found = new Set();
+  let match = mentionRegex.exec(text);
+  while (match) {
+    const username = String(match[1] || "").toLowerCase();
+    if (username) found.add(username);
+    match = mentionRegex.exec(text);
+  }
+  return Array.from(found);
+};
+
+const notifyMentions = async (mentionedUsers, actorUser, postId) => {
+  await Promise.all(
+    mentionedUsers
+      .filter((u) => u._id.toString() !== actorUser._id.toString())
+      .map((u) =>
+        createNotification(
+          u._id,
+          "You were mentioned",
+          `${actorUser.name || actorUser.username} mentioned you in a post.`,
+          "info",
+          postId,
+          "post"
+        )
+      )
+  );
+};
 
 // Create a new post
 const createPost = async (req, res) => {
@@ -34,17 +64,29 @@ const createPost = async (req, res) => {
       }
     }
 
+    const normalizedContent = content || "";
+    const mentionUsernames = extractMentionedUsernames(normalizedContent);
+
     const post = new Post({
       userId: req.user._id,
       username: req.user.username,
-      content: content || "",
+      authorName: req.user.name || req.user.username,
+      authorAvatar: req.user.avatar || "",
+      content: normalizedContent,
       mediaUrl,
       mediaType,
       tags: tags || [],
+      mentions: mentionUsernames,
       category: category || "general",
     });
 
     const createdPost = await post.save();
+    if (mentionUsernames.length > 0) {
+      const mentionedUsers = await User.find({
+        username: { $in: mentionUsernames },
+      }).select("_id username");
+      await notifyMentions(mentionedUsers, req.user, createdPost._id);
+    }
     res.status(201).json(createdPost);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -57,9 +99,13 @@ const getPosts = async (req, res) => {
     const pageSize = 10;
     const page = Number(req.query.page) || 1;
     const userId = req.user?._id; // Get current user ID if authenticated
+    const visibilityFilter = userId
+      ? { "reports.userId": { $ne: userId } }
+      : {};
 
-    const count = await Post.countDocuments({});
-    const posts = await Post.find({})
+    const count = await Post.countDocuments(visibilityFilter);
+    const posts = await Post.find(visibilityFilter)
+      .populate("userId", "name username avatar")
       .sort({ createdAt: -1 })
       .limit(pageSize)
       .skip(pageSize * (page - 1));
@@ -67,6 +113,15 @@ const getPosts = async (req, res) => {
     // Add isLiked and isSaved status for authenticated users
     const postsWithStatus = posts.map((post) => {
       const postObj = post.toObject();
+      const profileName =
+        postObj.userId?.name || postObj.authorName || postObj.username;
+      const profileAvatar = postObj.userId?.avatar || postObj.authorAvatar || "";
+      const profileUsername =
+        postObj.userId?.username || postObj.username || profileName;
+
+      postObj.username = profileUsername;
+      postObj.authorName = profileName;
+      postObj.authorAvatar = profileAvatar;
       if (userId) {
         postObj.isLiked = post.likes.some(
           (like) => like.userId.toString() === userId.toString()
@@ -124,8 +179,33 @@ const updatePost = async (req, res) => {
 
       post.content = content || post.content;
       post.tags = tags || post.tags;
+      post.authorName = req.user.name || post.authorName || req.user.username;
+      post.authorAvatar = req.user.avatar || post.authorAvatar || "";
+      post.mentions = extractMentionedUsernames(post.content);
+
+      if (req.file) {
+        try {
+          const result = await uploadToCloudinary(req.file);
+          post.mediaUrl = result.secure_url;
+          post.mediaType = result.resource_type === "video" ? "video" : "image";
+        } catch (uploadError) {
+          post.mediaUrl = `/uploads/${req.file.filename}`;
+          post.mediaType = req.file.mimetype.startsWith("video/") ? "video" : "image";
+        }
+      }
+
+      if (req.body.removeMedia === "true") {
+        post.mediaUrl = "";
+        post.mediaType = "image";
+      }
 
       const updatedPost = await post.save();
+      if (post.mentions.length > 0) {
+        const mentionedUsers = await User.find({
+          username: { $in: post.mentions },
+        }).select("_id username");
+        await notifyMentions(mentionedUsers, req.user, updatedPost._id);
+      }
       res.json(updatedPost);
     } else {
       res.status(404).json({ message: "Post not found" });
@@ -306,6 +386,120 @@ const savePost = async (req, res) => {
   }
 };
 
+// Report post
+const reportPost = async (req, res) => {
+  try {
+    const { reason, reportCategory, additionalDetails } = req.body;
+    const post = await Post.findById(req.params.id);
+
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    if (post.userId.toString() === req.user._id.toString()) {
+      return res
+        .status(400)
+        .json({ message: "You cannot report your own post" });
+    }
+
+    const alreadyReported = post.reports.find(
+      (report) => report.userId.toString() === req.user._id.toString()
+    );
+
+    if (alreadyReported) {
+      return res.status(400).json({ message: "Post already reported by this user" });
+    }
+
+    post.reports.push({
+      userId: req.user._id,
+      reportCategory: reportCategory || "other",
+      reason: reason?.trim() || "Inappropriate content",
+      additionalDetails: additionalDetails?.trim() || "",
+      moderationStatus: "pending",
+    });
+
+    await post.save();
+    return res.json({
+      message:
+        "Report submitted. This post will be hidden from your feed while moderation reviews it.",
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+// Admin: get reported posts queue
+const getReportedPosts = async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Admin access required" });
+    }
+
+    const pageSize = 20;
+    const page = Number(req.query.page) || 1;
+    const statusFilter = req.query.status;
+    const categoryFilter = req.query.category;
+    const elemMatch = {};
+    if (statusFilter) {
+      elemMatch.moderationStatus = statusFilter;
+    }
+    if (categoryFilter) {
+      elemMatch.reportCategory = categoryFilter;
+    }
+    const reportMatch = Object.keys(elemMatch).length
+      ? { reports: { $elemMatch: elemMatch } }
+      : { "reports.0": { $exists: true } };
+
+    const count = await Post.countDocuments(reportMatch);
+    const posts = await Post.find(reportMatch)
+      .populate("userId", "name username email")
+      .sort({ "reports.reportedAt": -1, createdAt: -1 })
+      .limit(pageSize)
+      .skip(pageSize * (page - 1));
+
+    return res.json({
+      posts,
+      page,
+      pages: Math.ceil(count / pageSize),
+      total: count,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+// Admin: update report status
+const updateReportStatus = async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Admin access required" });
+    }
+
+    const { postId, reportId } = req.params;
+    const { moderationStatus } = req.body;
+    const allowed = ["pending", "under_review", "resolved", "dismissed"];
+    if (!allowed.includes(moderationStatus)) {
+      return res.status(400).json({ message: "Invalid moderation status" });
+    }
+
+    const post = await Post.findById(postId);
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    const report = post.reports.id(reportId);
+    if (!report) {
+      return res.status(404).json({ message: "Report not found" });
+    }
+
+    report.moderationStatus = moderationStatus;
+    await post.save();
+    return res.json({ message: "Report status updated", post });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   createPost,
   getPosts,
@@ -316,4 +510,7 @@ module.exports = {
   addComment,
   deleteComment,
   savePost,
+  reportPost,
+  getReportedPosts,
+  updateReportStatus,
 };
