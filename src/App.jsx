@@ -9,6 +9,7 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Onboarding from "./pages/Onboarding";
 import Feed from "./components/feed/InstagramFeed";
+import SavedFeed from "./components/feed/SavedFeed";
 import Echoes from "./components/echoes/Echoes";
 import Pulse from "./components/pulse/Pulse";
 import Profile from "./components/profile/Profile";
@@ -112,6 +113,18 @@ function App() {
                 <LockedAppRoute>
                   <Layout>
                     <Feed />
+                  </Layout>
+                </LockedAppRoute>
+              </AppRoute>
+            }
+          />
+          <Route
+            path="/saved"
+            element={
+              <AppRoute>
+                <LockedAppRoute>
+                  <Layout>
+                    <SavedFeed />
                   </Layout>
                 </LockedAppRoute>
               </AppRoute>

@@ -11,6 +11,7 @@ const {
   deleteComment,
   savePost,
   reportPost,
+  getSavedPosts,
   getReportedPosts,
   updateReportStatus,
 } = require("../controllers/postController");
@@ -34,6 +35,8 @@ router
   .route("/")
   .post(auth, upload.single("media"), createPost)
   .get(auth, getPosts);
+
+router.route("/saved").get(auth, getSavedPosts);
 
 router
   .route("/:id")

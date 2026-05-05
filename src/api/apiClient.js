@@ -1,9 +1,15 @@
 // API client for GlowSphere with authentication support
 
-// Use environment variable or fallback to localhost for development
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5002/api";
+// Use relative /api by default to avoid port-mismatch issues.
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
 class ApiClient {
+  buildUrl(baseUrl, endpoint) {
+    const safeBase = String(baseUrl || "").replace(/\/+$/, "");
+    const safeEndpoint = String(endpoint || "").replace(/^\/+/, "");
+    return `${safeBase}/${safeEndpoint}`;
+  }
+
   // Get token from localStorage
   getToken() {
     return localStorage.getItem("token");
@@ -37,7 +43,7 @@ class ApiClient {
 
   async get(endpoint, authenticated = false) {
     try {
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      const response = await fetch(this.buildUrl(API_BASE_URL, endpoint), {
         headers: this.getHeaders(authenticated),
       });
 
@@ -50,16 +56,18 @@ class ApiClient {
         } catch {
           errorMessage = errorText || errorMessage;
         }
-        
+
         // For 401 on protected endpoints (not auth endpoints), remove token
         if (response.status === 401) {
-          const isAuthEndpoint = endpoint.includes('/auth/login') || endpoint.includes('/auth/register');
+          const isAuthEndpoint =
+            endpoint.includes("/auth/login") ||
+            endpoint.includes("/auth/register");
           if (!isAuthEndpoint) {
             this.removeToken();
             throw new Error("Authentication required. Please log in again.");
           }
         }
-        
+
         throw new Error(errorMessage);
       }
 
@@ -72,7 +80,7 @@ class ApiClient {
         error.message.includes("Failed to fetch")
       ) {
         throw new Error(
-          "Unable to connect to server. Please check your internet connection and ensure the backend is running."
+          "Unable to connect to server. Please check your internet connection and ensure the backend is running.",
         );
       }
       throw error;
@@ -81,7 +89,7 @@ class ApiClient {
 
   async post(endpoint, data, authenticated = false) {
     try {
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      const response = await fetch(this.buildUrl(API_BASE_URL, endpoint), {
         method: "POST",
         headers: this.getHeaders(authenticated),
         body: JSON.stringify(data),
@@ -96,17 +104,19 @@ class ApiClient {
         } catch {
           errorMessage = errorText || errorMessage;
         }
-        
+
         // For 401 on protected endpoints (not auth endpoints), remove token
         if (response.status === 401) {
-          const isAuthEndpoint = endpoint.includes('/auth/login') || endpoint.includes('/auth/register');
+          const isAuthEndpoint =
+            endpoint.includes("/auth/login") ||
+            endpoint.includes("/auth/register");
           if (!isAuthEndpoint) {
             this.removeToken();
             throw new Error("Authentication required. Please log in again.");
           }
           // For login/register endpoints, use the backend's specific error message
         }
-        
+
         throw new Error(errorMessage);
       }
 
@@ -119,7 +129,7 @@ class ApiClient {
         error.message.includes("Failed to fetch")
       ) {
         throw new Error(
-          "Unable to connect to server. Please check your internet connection and ensure the backend is running."
+          "Unable to connect to server. Please check your internet connection and ensure the backend is running.",
         );
       }
       throw error;
@@ -133,7 +143,7 @@ class ApiClient {
 
   async put(endpoint, data, authenticated = false) {
     try {
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      const response = await fetch(this.buildUrl(API_BASE_URL, endpoint), {
         method: "PUT",
         headers: this.getHeaders(authenticated),
         body: JSON.stringify(data),
@@ -148,13 +158,13 @@ class ApiClient {
         } catch {
           errorMessage = errorText || errorMessage;
         }
-        
+
         // For 401 on protected endpoints, remove token
         if (response.status === 401) {
           this.removeToken();
           throw new Error("Authentication required. Please log in again.");
         }
-        
+
         throw new Error(errorMessage);
       }
 
@@ -165,11 +175,12 @@ class ApiClient {
     }
   }
 
-  async delete(endpoint, authenticated = false) {
+  async delete(endpoint, authenticated = false, data = null) {
     try {
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      const response = await fetch(this.buildUrl(API_BASE_URL, endpoint), {
         method: "DELETE",
         headers: this.getHeaders(authenticated),
+        ...(data ? { body: JSON.stringify(data) } : {}),
       });
 
       if (!response.ok) {
@@ -181,13 +192,13 @@ class ApiClient {
         } catch {
           errorMessage = errorText || errorMessage;
         }
-        
+
         // For 401 on protected endpoints, remove token
         if (response.status === 401) {
           this.removeToken();
           throw new Error("Authentication required. Please log in again.");
         }
-        
+
         throw new Error(errorMessage);
       }
 

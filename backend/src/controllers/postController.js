@@ -147,6 +147,42 @@ const getPosts = async (req, res) => {
   }
 };
 
+// Get saved posts for the authenticated user
+const getSavedPosts = async (req, res) => {
+  try {
+    const userId = req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    const posts = await Post.find({ "savedBy.userId": userId })
+      .populate("userId", "name username avatar")
+      .sort({ createdAt: -1 });
+
+    const postsWithStatus = posts.map((post) => {
+      const postObj = post.toObject();
+      const profileName =
+        postObj.userId?.name || postObj.authorName || postObj.username;
+      const profileAvatar = postObj.userId?.avatar || postObj.authorAvatar || "";
+      const profileUsername =
+        postObj.userId?.username || postObj.username || profileName;
+
+      postObj.username = profileUsername;
+      postObj.authorName = profileName;
+      postObj.authorAvatar = profileAvatar;
+      postObj.isLiked = post.likes.some(
+        (like) => like.userId.toString() === userId.toString()
+      );
+      postObj.isSaved = true;
+      return postObj;
+    });
+
+    return res.json({ posts: postsWithStatus });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
 // Get post by ID
 const getPostById = async (req, res) => {
   try {
@@ -503,6 +539,7 @@ const updateReportStatus = async (req, res) => {
 module.exports = {
   createPost,
   getPosts,
+  getSavedPosts,
   getPostById,
   updatePost,
   deletePost,

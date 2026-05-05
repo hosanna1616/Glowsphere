@@ -155,7 +155,11 @@ const inviteToPod = async (req, res) => {
       `${req.user.name} invited you to join "${pod.name}".`,
       "info",
       pod._id,
-      "study_pod"
+      "study_pod",
+      {
+        actionPath: "/studysuite",
+        actorUsername: req.user.username,
+      }
     );
 
     emitPodUpdate(pod._id, "study_pod_invite", {
@@ -207,7 +211,11 @@ const respondToInvite = async (req, res) => {
       `${req.user.name} ${action === "accept" ? "joined" : "declined"} "${pod.name}".`,
       action === "accept" ? "success" : "warning",
       pod._id,
-      "study_pod"
+      "study_pod",
+      {
+        actionPath: "/studysuite",
+        actorUsername: req.user.username,
+      }
     );
 
     emitPodUpdate(pod._id, "study_pod_updated", pod);

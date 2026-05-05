@@ -1,4 +1,5 @@
 const Notification = require("../models/Notification");
+const { getIo } = require("../socket");
 
 // Get user notifications
 const getNotifications = async (req, res) => {
@@ -81,9 +82,11 @@ const createNotification = async (
   message,
   type = "info",
   relatedEntityId = null,
-  relatedEntityType = null
+  relatedEntityType = null,
+  options = {}
 ) => {
   try {
+    const { actionPath = "", actorUsername = "" } = options || {};
     const notification = new Notification({
       userId,
       title,
@@ -91,9 +94,15 @@ const createNotification = async (
       type,
       relatedEntityId,
       relatedEntityType,
+      actionPath,
+      actorUsername,
     });
 
     await notification.save();
+    const io = getIo();
+    if (io) {
+      io.to(`user:${String(userId)}`).emit("notification:new", notification);
+    }
     return notification;
   } catch (error) {
     console.error("Error creating notification:", error.message);

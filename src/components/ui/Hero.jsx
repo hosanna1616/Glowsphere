@@ -17,11 +17,12 @@ const Hero = () => {
   return (
     <section className="text-center mb-16">
       <h1 className="text-5xl md:text-7xl font-bold mb-6 text-amber-400">
-        Illuminate Your Digital Journey
+        You Deserve a Space That Feels Like Home
       </h1>
       <p className="text-xl text-amber-200 max-w-2xl mx-auto mb-10">
-        Connect, share, and grow in a vibrant community of like-minded
-        individuals passionate about technology and innovation.
+        GlowSphere is where your voice is heard, your growth is celebrated, and
+        your journey is met with kindness. Share your story, build real
+        confidence, and shine in your own way.
       </p>
       <div className="flex justify-center gap-4">
         <button

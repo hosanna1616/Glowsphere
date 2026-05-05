@@ -10,12 +10,17 @@ const {
   removeSupporter,
   addComment,
   deleteComment,
+  createReminder,
+  getMyReminders,
+  deactivateReminder,
 } = require("../controllers/questController");
 const auth = require("../middleware/auth");
 
 const router = express.Router();
 
 router.route("/").post(auth, createQuest).get(auth, getQuests);
+router.route("/reminders").post(auth, createReminder).get(auth, getMyReminders);
+router.route("/reminders/:reminderId").delete(auth, deactivateReminder);
 
 router
   .route("/:id")

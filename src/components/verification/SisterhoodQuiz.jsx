@@ -14,122 +14,254 @@ const questionBank = [
   },
   {
     id: "q2",
-    question: "Which can be period products?",
-    options: ["Only pads", "Only cups", "Only tampons", "Pads, cups, and tampons"],
-    correctAnswer: "Pads, cups, and tampons",
+    question: "Which are all valid period products?",
+    options: [
+      "Only pads",
+      "Only cups",
+      "Only tampons",
+      "Pads, tampons, and menstrual cups",
+    ],
+    correctAnswer: "Pads, tampons, and menstrual cups",
   },
   {
     id: "q3",
-    question: "A cycle often averages around:",
-    options: ["14 days", "21 days", "28 days", "45 days"],
-    correctAnswer: "28 days",
+    question:
+      "If Day 1 of your last period was June 1 and your cycle is 28 days, your next expected Day 1 is around:",
+    options: ["June 14", "June 21", "June 29", "July 5"],
+    correctAnswer: "June 29",
   },
   {
     id: "q4",
-    question: "Which is a common period symptom?",
-    options: ["Cramps", "Mood swings", "Bloating", "All of the above"],
-    correctAnswer: "All of the above",
+    question:
+      "If your cycle is 30 days, ovulation often happens roughly:",
+    options: [
+      "Around Day 5",
+      "Around Day 16",
+      "On Day 30 exactly",
+      "Only after the period ends",
+    ],
+    correctAnswer: "Around Day 16",
   },
   {
     id: "q5",
-    question: "Which skincare order is generally correct?",
+    question: "A common sign of ovulation is:",
     options: [
-      "Cleanser → moisturizer → sunscreen",
-      "Sunscreen → cleanser → toner",
-      "Toner → sunscreen → cleanser",
-      "Moisturizer → cleanser → sunscreen",
+      "Clear, stretchy cervical mucus",
+      "No change across the cycle",
+      "Severe fever always",
+      "Zero appetite for a month",
     ],
-    correctAnswer: "Cleanser → moisturizer → sunscreen",
+    correctAnswer: "Clear, stretchy cervical mucus",
   },
   {
     id: "q6",
-    question: "A go-to emergency handbag item for many girls is:",
-    options: ["Lip balm", "Period product", "Hair tie", "All of the above"],
-    correctAnswer: "All of the above",
+    question:
+      "Cycle Day 1 is usually counted as:",
+    options: [
+      "The day spotting ends",
+      "The first day of full flow",
+      "The day before bleeding starts",
+      "Any random day in the month",
+    ],
+    correctAnswer: "The first day of full flow",
   },
   {
     id: "q7",
-    question: "On a heavy-flow day, a common best practice is:",
+    question:
+      "If your cycle length changed from 27 to 32 days for one month, the healthiest interpretation is usually:",
     options: [
-      "Change product regularly",
-      "Ignore discomfort",
-      "Skip hydration",
-      "Wear only white and hope",
+      "You are broken",
+      "Small variation can happen due to stress, sleep, travel, etc.",
+      "It must always be exactly the same each month",
+      "Ignore it forever even if pattern continues for months",
     ],
-    correctAnswer: "Change product regularly",
+    correctAnswer:
+      "Small variation can happen due to stress, sleep, travel, etc.",
   },
   {
     id: "q8",
-    question: "Which statement is true?",
+    question: "Which symptom cluster is commonly linked to PMS?",
     options: [
-      "Cycles are identical for everyone",
-      "Cycle length can vary person to person",
-      "PMS is a myth",
-      "Symptoms never change",
+      "Bloating, breast tenderness, mood shifts",
+      "Only hair growth",
+      "Only sore throat",
+      "No possible symptoms",
     ],
-    correctAnswer: "Cycle length can vary person to person",
+    correctAnswer: "Bloating, breast tenderness, mood shifts",
   },
   {
     id: "q9",
-    question: "A classic 'girl room' comfort combo can be:",
-    options: [
-      "Blanket + tea + playlist",
-      "No rest, only stress",
-      "Skipping meals",
-      "None of these",
-    ],
-    correctAnswer: "Blanket + tea + playlist",
+    question:
+      "A period that starts on April 3 with a 26-day cycle is expected next around:",
+    options: ["April 18", "April 29", "May 9", "May 20"],
+    correctAnswer: "April 29",
   },
   {
     id: "q10",
-    question: "Which is usually makeup-first between these two?",
-    options: ["Foundation", "Concealer", "Both are mandatory first", "Neither ever"],
-    correctAnswer: "Foundation",
+    question:
+      "Which self-care set is most realistic for cramp support?",
+    options: [
+      "Heat + hydration + light movement if tolerated",
+      "No food, no water, no rest",
+      "Only social media scrolling",
+      "Ignore all pain signals",
+    ],
+    correctAnswer: "Heat + hydration + light movement if tolerated",
   },
   {
     id: "q11",
-    question: "A healthy way to manage cramps can include:",
-    options: ["Heat pad", "Hydration", "Light movement", "All of the above"],
-    correctAnswer: "All of the above",
+    question:
+      "If someone says their luteal phase is usually 12-14 days, this means ovulation is generally:",
+    options: [
+      "About 12-14 days before next period",
+      "Always on Day 1",
+      "Never related to the next period",
+      "Exactly 3 days after period ends",
+    ],
+    correctAnswer: "About 12-14 days before next period",
   },
   {
     id: "q12",
-    question: "Which outfit detail is often praised in girly style content?",
-    options: ["Color coordination", "Messy layering only", "Random mismatch always", "No accessories ever"],
-    correctAnswer: "Color coordination",
+    question:
+      "Which statement about discharge across the cycle is most accurate?",
+    options: [
+      "It can change texture throughout the cycle",
+      "It never changes in any person",
+      "Any discharge means infection",
+      "It disappears for everyone after puberty",
+    ],
+    correctAnswer: "It can change texture throughout the cycle",
   },
   {
     id: "q13",
-    question: "Which is a common self-care reminder?",
+    question:
+      "If your period app predicts Day 1 tomorrow, the most useful prep is:",
     options: [
-      "Rest is productive too",
-      "Ignore your body signals",
-      "Skip water all day",
-      "Sleep is optional forever",
+      "Carry products and plan a lighter schedule if needed",
+      "Do nothing and panic later",
+      "Delete the tracker",
+      "Skip hydration all day",
     ],
-    correctAnswer: "Rest is productive too",
+    correctAnswer: "Carry products and plan a lighter schedule if needed",
   },
   {
     id: "q14",
-    question: "A period tracker app is useful mainly for:",
+    question:
+      "For tracking cycle patterns, which is the most useful data pair?",
     options: [
-      "Predicting cycle patterns",
-      "Deleting contacts",
-      "Changing phone wallpaper only",
-      "Gaming rank upgrades",
+      "Start date + flow pattern",
+      "Only favorite color",
+      "Only shoe size",
+      "Only screen time",
     ],
-    correctAnswer: "Predicting cycle patterns",
+    correctAnswer: "Start date + flow pattern",
   },
   {
     id: "q15",
-    question: "Which phrase sounds like supportive sisterhood?",
+    question:
+      "If your last two cycle lengths are 27 and 29 days, your rough average is:",
+    options: ["24 days", "26 days", "28 days", "31 days"],
+    correctAnswer: "28 days",
+  },
+  {
+    id: "q16",
+    question:
+      "Which reminder makes sense in a women-centered wellness app?",
     options: [
-      "Girls support girls",
-      "Everyone competes silently",
-      "Never compliment anyone",
-      "Kindness is weak",
+      "Hydrate, check symptoms, and rest when needed",
+      "Never log your cycle",
+      "Ignore severe pain always",
+      "Skip all check-ins",
     ],
-    correctAnswer: "Girls support girls",
+    correctAnswer: "Hydrate, check symptoms, and rest when needed",
+  },
+  {
+    id: "q17",
+    question:
+      "If Day 1 was August 10 and cycle length is 31 days, next Day 1 is likely around:",
+    options: ["August 28", "September 2", "September 10", "September 20"],
+    correctAnswer: "September 10",
+  },
+  {
+    id: "q18",
+    question:
+      "Which sign should be treated seriously and discussed with a professional?",
+    options: [
+      "Pain that disrupts normal daily life repeatedly",
+      "Mild mood change once",
+      "Wanting chocolate",
+      "Feeling sleepy one evening",
+    ],
+    correctAnswer: "Pain that disrupts normal daily life repeatedly",
+  },
+  {
+    id: "q19",
+    question:
+      "A supportive sisterhood response to period pain is:",
+    options: [
+      "Validate her and offer practical help",
+      "Say she is exaggerating",
+      "Make jokes about it",
+      "Ignore her message",
+    ],
+    correctAnswer: "Validate her and offer practical help",
+  },
+  {
+    id: "q20",
+    question:
+      "Which tracking habit improves prediction quality over time?",
+    options: [
+      "Consistent monthly logging of start dates",
+      "Logging once per year",
+      "Never updating after setup",
+      "Guessing random dates",
+    ],
+    correctAnswer: "Consistent monthly logging of start dates",
+  },
+  {
+    id: "q21",
+    question:
+      "A cycle can still be considered within a common adult range if it is:",
+    options: ["12-18 days", "21-35 days", "40-55 days", "Always exactly 28"],
+    correctAnswer: "21-35 days",
+  },
+  {
+    id: "q22",
+    question:
+      "If a 28-day cycle starts on November 3, period tracking usually marks fertile window roughly around:",
+    options: ["Days 2-4", "Days 8-15", "Days 20-26", "Only Day 28"],
+    correctAnswer: "Days 8-15",
+  },
+  {
+    id: "q23",
+    question:
+      "Which period-care statement is accurate?",
+    options: [
+      "Changing products regularly helps comfort and hygiene",
+      "One product can be worn indefinitely",
+      "Hydration has zero impact",
+      "Cramps are always imaginary",
+    ],
+    correctAnswer: "Changing products regularly helps comfort and hygiene",
+  },
+  {
+    id: "q24",
+    question:
+      "If your cycle average is 29 days and last period started on January 4, next start is expected around:",
+    options: ["January 20", "February 2", "February 10", "February 18"],
+    correctAnswer: "February 2",
+  },
+  {
+    id: "q25",
+    question:
+      "A realistic period productivity strategy is:",
+    options: [
+      "Adjust intensity by energy levels across the cycle",
+      "Work at max intensity every day regardless of symptoms",
+      "Ignore sleep and hydration",
+      "Never plan around your body",
+    ],
+    correctAnswer: "Adjust intensity by energy levels across the cycle",
   },
 ];
 
@@ -152,7 +284,9 @@ const makeRng = (seedValue) => {
 };
 
 const pickQuestionsForUser = (seedString) => {
-  const rng = makeRng(hashSeed(seedString));
+  const dailyRotationKey = new Date().toISOString().slice(0, 10);
+  const combinedSeed = `${seedString}|${dailyRotationKey}`;
+  const rng = makeRng(hashSeed(combinedSeed));
   const pool = [...questionBank];
   for (let i = pool.length - 1; i > 0; i -= 1) {
     const j = Math.floor(rng() * (i + 1));

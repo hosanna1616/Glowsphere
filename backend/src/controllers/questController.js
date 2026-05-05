@@ -1,5 +1,6 @@
 const Quest = require("../models/Quest");
 const User = require("../models/User");
+const QuestReminder = require("../models/QuestReminder");
 
 // Create a new quest
 const createQuest = async (req, res) => {
@@ -278,6 +279,67 @@ const deleteComment = async (req, res) => {
   }
 };
 
+const createReminder = async (req, res) => {
+  try {
+    const { questId, title, remindAt } = req.body;
+    if (!questId || !title || !remindAt) {
+      return res
+        .status(400)
+        .json({ message: "questId, title, and remindAt are required" });
+    }
+
+    const quest = await Quest.findById(questId);
+    if (!quest) {
+      return res.status(404).json({ message: "Quest not found" });
+    }
+
+    const reminder = await QuestReminder.create({
+      userId: req.user._id,
+      questId,
+      title: String(title).trim(),
+      remindAt: new Date(remindAt),
+      isActive: true,
+    });
+
+    return res.status(201).json(reminder);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+const getMyReminders = async (req, res) => {
+  try {
+    const reminders = await QuestReminder.find({
+      userId: req.user._id,
+      isActive: true,
+    })
+      .populate("questId", "title")
+      .sort({ remindAt: 1 });
+
+    return res.json(reminders);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+const deactivateReminder = async (req, res) => {
+  try {
+    const reminder = await QuestReminder.findOne({
+      _id: req.params.reminderId,
+      userId: req.user._id,
+    });
+    if (!reminder) {
+      return res.status(404).json({ message: "Reminder not found" });
+    }
+
+    reminder.isActive = false;
+    await reminder.save();
+    return res.json({ message: "Reminder deactivated" });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   createQuest,
   getQuests,
@@ -289,4 +351,7 @@ module.exports = {
   removeSupporter,
   addComment,
   deleteComment,
+  createReminder,
+  getMyReminders,
+  deactivateReminder,
 };

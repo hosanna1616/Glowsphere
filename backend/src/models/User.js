@@ -99,10 +99,41 @@ const userSchema = new mongoose.Schema(
         ref: "User",
       },
     ],
+    tokenVersion: {
+      type: Number,
+      default: 0,
+    },
+    settings: {
+      profileVisibility: {
+        type: String,
+        enum: ["public", "friends", "private"],
+        default: "public",
+      },
+      discoverableByEmail: {
+        type: Boolean,
+        default: true,
+      },
+      allowTagging: {
+        type: Boolean,
+        default: true,
+      },
+      securityAlerts: {
+        type: Boolean,
+        default: true,
+      },
+      marketingEmails: {
+        type: Boolean,
+        default: false,
+      },
+      darkMode: {
+        type: Boolean,
+        default: true,
+      },
+    },
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 // Hash password before saving

@@ -17,10 +17,11 @@ const Community = () => {
   return (
     <section className="bg-card-bg rounded-2xl p-8 border border-amber-500/30 mb-16">
       <h2 className="text-3xl font-bold text-center mb-4 text-amber-300">
-        Join the Community
+        Join a Sisterhood That Uplifts You
       </h2>
       <p className="text-center text-amber-200 max-w-2xl mx-auto mb-8">
-        Be part of a supportive network of learners, creators, and innovators.
+        Surround yourself with women who cheer for your dreams, support your
+        hard days, and celebrate your glow in every season of life.
       </p>
       <div className="flex justify-center">
         <button

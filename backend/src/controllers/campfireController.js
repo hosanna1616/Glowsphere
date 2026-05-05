@@ -2,6 +2,7 @@ const Room = require("../models/Room");
 const Message = require("../models/Message");
 const User = require("../models/User");
 const { uploadToCloudinary } = require("../utils/upload");
+const { createNotification } = require("./notificationController");
 
 const getPrimaryFireSpirit = (user) => {
   if (Array.isArray(user.fireSpirits) && user.fireSpirits.length > 0) {
@@ -249,6 +250,29 @@ const sendTextMessage = async (req, res) => {
     });
 
     const createdMessage = await message.save();
+
+    const room = await Room.findById(req.params.id).select("name participants");
+    if (room) {
+      await Promise.all(
+        room.participants
+          .filter((participant) => participant.userId.toString() !== req.user._id.toString())
+          .map((participant) =>
+            createNotification(
+              participant.userId,
+              "Unread message",
+              `${req.user.username} sent a message in ${room.name}.`,
+              "info",
+              createdMessage._id,
+              "message",
+              {
+                actionPath: "/campfire",
+                actorUsername: req.user.username,
+              }
+            )
+          )
+      );
+    }
+
     res.status(201).json(createdMessage);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -284,6 +308,29 @@ const sendVoiceMessage = async (req, res) => {
     });
 
     const createdMessage = await message.save();
+
+    const room = await Room.findById(req.params.id).select("name participants");
+    if (room) {
+      await Promise.all(
+        room.participants
+          .filter((participant) => participant.userId.toString() !== req.user._id.toString())
+          .map((participant) =>
+            createNotification(
+              participant.userId,
+              "Unread voice message",
+              `${req.user.username} sent a voice message in ${room.name}.`,
+              "info",
+              createdMessage._id,
+              "message",
+              {
+                actionPath: "/campfire",
+                actorUsername: req.user.username,
+              }
+            )
+          )
+      );
+    }
+
     res.status(201).json(createdMessage);
   } catch (error) {
     res.status(500).json({ message: error.message });

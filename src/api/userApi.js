@@ -55,7 +55,7 @@ class UserApi {
     try {
       return await apiClient.get(
         `/auth/search?username=${encodeURIComponent(username)}`,
-        true
+        true,
       );
     } catch (error) {
       throw error;
@@ -76,6 +76,26 @@ class UserApi {
     } catch (error) {
       throw error;
     }
+  }
+
+  async updateSettings(settingsData) {
+    return apiClient.put("/auth/settings", settingsData, true);
+  }
+
+  async changePassword(currentPassword, newPassword) {
+    return apiClient.post(
+      "/auth/change-password",
+      { currentPassword, newPassword },
+      true,
+    );
+  }
+
+  async logoutAllSessions() {
+    return apiClient.post("/auth/logout-all", {}, true);
+  }
+
+  async deleteAccount(password) {
+    return apiClient.delete("/auth/account", true, { password });
   }
 
   // Check if user is authenticated

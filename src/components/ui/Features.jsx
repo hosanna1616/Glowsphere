@@ -6,19 +6,19 @@ const Features = () => {
       emoji: "✨",
       title: "GlowLogs",
       description:
-        "Document your learning journey and achievements with interactive logs.",
+        "Reflect on your daily wins, emotions, and milestones in a beautiful journal that reminds you how far you have come.",
     },
     {
       emoji: "🎯",
       title: "GlowQuest",
       description:
-        "Embark on challenges and quests to level up your skills and knowledge.",
+        "Set meaningful goals, stay motivated with gentle challenges, and turn small steps into powerful progress.",
     },
     {
       emoji: "📚",
       title: "StudySuite",
       description:
-        "Access curated learning materials and resources for your growth.",
+        "Focus with calming study tools, curated resources, and a rhythm that helps you learn without burnout.",
     },
   ];
 

@@ -22,6 +22,13 @@ const authLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  // Do not block local dev while iterating on auth flows.
+  skip: (req) => {
+    if (process.env.NODE_ENV !== "development") return false;
+    const ip = req.ip || req.socket?.remoteAddress || "";
+    const localhostIps = ["127.0.0.1", "::1", "::ffff:127.0.0.1"];
+    return localhostIps.includes(ip);
+  },
 });
 
 module.exports = {

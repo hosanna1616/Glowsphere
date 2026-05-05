@@ -12,6 +12,9 @@ const Profile = () => {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [saving, setSaving] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [updatingPassword, setUpdatingPassword] = useState(false);
+  const [runningDangerAction, setRunningDangerAction] = useState(false);
   const [friends, setFriends] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
@@ -30,6 +33,19 @@ const Profile = () => {
     glowPoints: user?.glowPoints || 0,
     bloomGarden: user?.bloomGarden || [],
     emberCrownUntil: user?.emberCrownUntil || null,
+  });
+  const [settingsData, setSettingsData] = useState({
+    profileVisibility: "public",
+    discoverableByEmail: true,
+    allowTagging: true,
+    securityAlerts: true,
+    marketingEmails: false,
+    darkMode: true,
+  });
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
   });
   const [avatarPreview, setAvatarPreview] = useState(
     resolveMediaUrl(user?.avatar || ""),
@@ -56,7 +72,7 @@ const Profile = () => {
             setAvatarPreview(resolveMediaUrl(exact.avatar || ""));
           } else {
             setViewedUser(null);
-            setError("User profile not found");
+            setError("User profile not found or not visible to you");
           }
           return;
         }
@@ -76,6 +92,15 @@ const Profile = () => {
             bloomGarden: userProfile.bloomGarden || profileData.bloomGarden,
             emberCrownUntil:
               userProfile.emberCrownUntil ?? profileData.emberCrownUntil,
+          });
+          setSettingsData({
+            profileVisibility: userProfile.settings?.profileVisibility || "public",
+            discoverableByEmail:
+              userProfile.settings?.discoverableByEmail ?? true,
+            allowTagging: userProfile.settings?.allowTagging ?? true,
+            securityAlerts: userProfile.settings?.securityAlerts ?? true,
+            marketingEmails: userProfile.settings?.marketingEmails ?? false,
+            darkMode: userProfile.settings?.darkMode ?? true,
           });
           setAvatarPreview(resolveMediaUrl(userProfile.avatar || ""));
         }
@@ -218,6 +243,138 @@ const Profile = () => {
       }
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSettingsSave = async () => {
+    setError("");
+    setSuccess("");
+    setSavingSettings(true);
+    try {
+      const response = await UserApi.updateSettings(settingsData);
+      const latestSettings = response?.settings || settingsData;
+      setSettingsData(latestSettings);
+      if (response?.user) {
+        setUser(response.user);
+      }
+      setSuccess("Settings updated successfully!");
+      setTimeout(() => setSuccess(""), 3000);
+    } catch (settingsError) {
+      setError(settingsError.message || "Failed to update settings.");
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
+  const updateSettingRealtime = async (key, value) => {
+    const previous = settingsData[key];
+    setSettingsData((prev) => ({ ...prev, [key]: value }));
+    setSavingSettings(true);
+    setError("");
+    try {
+      const response = await UserApi.updateSettings({ [key]: value });
+      if (response?.settings) {
+        setSettingsData((prev) => ({ ...prev, ...response.settings }));
+      }
+      if (response?.user) {
+        setUser(response.user);
+      }
+    } catch (realtimeError) {
+      setSettingsData((prev) => ({ ...prev, [key]: previous }));
+      setError(realtimeError.message || "Failed to update setting.");
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
+  const handlePasswordUpdate = async (e) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+
+    if (!passwordData.currentPassword || !passwordData.newPassword) {
+      setError("Please fill in all password fields.");
+      return;
+    }
+    if (passwordData.newPassword.length < 8) {
+      setError("New password must be at least 8 characters.");
+      return;
+    }
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      setError("New password and confirmation do not match.");
+      return;
+    }
+
+    setUpdatingPassword(true);
+    try {
+      await UserApi.changePassword(
+        passwordData.currentPassword,
+        passwordData.newPassword,
+      );
+      setPasswordData({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+      setSuccess("Password changed. Please log in again.");
+      setTimeout(() => {
+        logout();
+        navigate("/login");
+      }, 1200);
+    } catch (passwordError) {
+      setError(passwordError.message || "Failed to change password.");
+    } finally {
+      setUpdatingPassword(false);
+    }
+  };
+
+  const handleLogoutAllDevices = async () => {
+    setError("");
+    setSuccess("");
+    setRunningDangerAction(true);
+    try {
+      await UserApi.logoutAllSessions();
+      setSuccess("Logged out from all devices. Please sign in again.");
+      setTimeout(() => {
+        logout();
+        navigate("/login");
+      }, 1200);
+    } catch (logoutError) {
+      setError(logoutError.message || "Failed to log out all devices.");
+    } finally {
+      setRunningDangerAction(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    const password = window.prompt(
+      "To delete your account, enter your password:",
+      "",
+    );
+    if (!password) {
+      return;
+    }
+    const confirmed = window.confirm(
+      "This will permanently deactivate your account. Continue?",
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setError("");
+    setSuccess("");
+    setRunningDangerAction(true);
+    try {
+      await UserApi.deleteAccount(password);
+      setSuccess("Account deleted successfully.");
+      setTimeout(() => {
+        logout();
+        navigate("/");
+      }, 1000);
+    } catch (deleteError) {
+      setError(deleteError.message || "Failed to delete account.");
+    } finally {
+      setRunningDangerAction(false);
     }
   };
 
@@ -472,52 +629,220 @@ const Profile = () => {
 
           {activeTab === "settings" && (
             <div className="space-y-6">
+              {success && (
+                <div className="bg-green-900/30 border border-green-700 rounded-lg p-3 text-green-200">
+                  {success}
+                </div>
+              )}
+              {error && (
+                <div className="bg-red-900/30 border border-red-700 rounded-lg p-3 text-red-200">
+                  {error}
+                </div>
+              )}
               <div>
                 <h3 className="text-xl font-bold mb-4 text-amber-300">
-                  Account Settings
+                  Privacy & Preferences
                 </h3>
                 <div className="space-y-4">
+                  {savingSettings && (
+                    <div className="text-sm text-amber-300">Saving changes...</div>
+                  )}
                   <div className="flex justify-between items-center p-4 bg-stone-800 rounded-lg">
                     <div>
-                      <h4 className="font-medium text-amber-200">
-                        Two-Factor Authentication
-                      </h4>
+                      <h4 className="font-medium text-amber-200">Profile Visibility</h4>
                       <p className="text-amber-300 text-sm">
-                        Add an extra layer of security to your account
+                        Choose who can view your profile.
                       </p>
                     </div>
-                    <button className="bg-stone-700 px-4 py-2 rounded-lg hover:bg-stone-600 transition-colors text-amber-200">
-                      Enable
+                    <select
+                      value={settingsData.profileVisibility}
+                      onChange={(e) =>
+                        updateSettingRealtime("profileVisibility", e.target.value)
+                      }
+                      className="bg-stone-700 px-3 py-2 rounded-lg text-amber-200 border border-amber-500/20"
+                    >
+                      <option value="public">Public</option>
+                      <option value="friends">Friends</option>
+                      <option value="private">Private</option>
+                    </select>
+                  </div>
+                  <div className="flex justify-between items-center p-4 bg-stone-800 rounded-lg">
+                    <div>
+                      <h4 className="font-medium text-amber-200">Discoverable by Email</h4>
+                      <p className="text-amber-300 text-sm">
+                        Let people find you using your email address.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateSettingRealtime(
+                          "discoverableByEmail",
+                          !settingsData.discoverableByEmail,
+                        )
+                      }
+                      className="bg-stone-700 px-4 py-2 rounded-lg hover:bg-stone-600 transition-colors text-amber-200"
+                    >
+                      {settingsData.discoverableByEmail ? "On" : "Off"}
                     </button>
                   </div>
                   <div className="flex justify-between items-center p-4 bg-stone-800 rounded-lg">
                     <div>
-                      <h4 className="font-medium text-amber-200">
-                        Change Password
-                      </h4>
+                      <h4 className="font-medium text-amber-200">Allow Tagging</h4>
                       <p className="text-amber-300 text-sm">
-                        Update your password regularly for security
+                        Control whether others can tag you.
                       </p>
                     </div>
-                    <button className="bg-stone-700 px-4 py-2 rounded-lg hover:bg-stone-600 transition-colors text-amber-200">
-                      Change
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateSettingRealtime(
+                          "allowTagging",
+                          !settingsData.allowTagging,
+                        )
+                      }
+                      className="bg-stone-700 px-4 py-2 rounded-lg hover:bg-stone-600 transition-colors text-amber-200"
+                    >
+                      {settingsData.allowTagging ? "On" : "Off"}
                     </button>
                   </div>
                   <div className="flex justify-between items-center p-4 bg-stone-800 rounded-lg">
                     <div>
-                      <h4 className="font-medium text-amber-200">
-                        Privacy Settings
-                      </h4>
+                      <h4 className="font-medium text-amber-200">Security Alerts</h4>
                       <p className="text-amber-300 text-sm">
-                        Control who can see your profile and activity
+                        Receive alerts for important account events.
                       </p>
                     </div>
-                    <button className="bg-stone-700 px-4 py-2 rounded-lg hover:bg-stone-600 transition-colors text-amber-200">
-                      Manage
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateSettingRealtime(
+                          "securityAlerts",
+                          !settingsData.securityAlerts,
+                        )
+                      }
+                      className="bg-stone-700 px-4 py-2 rounded-lg hover:bg-stone-600 transition-colors text-amber-200"
+                    >
+                      {settingsData.securityAlerts ? "On" : "Off"}
+                    </button>
+                  </div>
+                  <div className="flex justify-between items-center p-4 bg-stone-800 rounded-lg">
+                    <div>
+                      <h4 className="font-medium text-amber-200">Marketing Emails</h4>
+                      <p className="text-amber-300 text-sm">
+                        Receive updates, feature launches, and newsletters.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateSettingRealtime(
+                          "marketingEmails",
+                          !settingsData.marketingEmails,
+                        )
+                      }
+                      className="bg-stone-700 px-4 py-2 rounded-lg hover:bg-stone-600 transition-colors text-amber-200"
+                    >
+                      {settingsData.marketingEmails ? "On" : "Off"}
+                    </button>
+                  </div>
+                  <div className="flex justify-between items-center p-4 bg-stone-800 rounded-lg">
+                    <div>
+                      <h4 className="font-medium text-amber-200">Dark Mode</h4>
+                      <p className="text-amber-300 text-sm">
+                        Keep dark mode enabled for this account.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateSettingRealtime("darkMode", !settingsData.darkMode)
+                      }
+                      className="bg-stone-700 px-4 py-2 rounded-lg hover:bg-stone-600 transition-colors text-amber-200"
+                    >
+                      {settingsData.darkMode ? "On" : "Off"}
+                    </button>
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={handleSettingsSave}
+                      disabled={savingSettings}
+                      className="bg-gold-gradient px-5 py-2 rounded-full font-semibold text-black disabled:opacity-60"
+                    >
+                      Sync All
                     </button>
                   </div>
                 </div>
               </div>
+
+              <div>
+                <h3 className="text-xl font-bold mb-4 text-amber-300">
+                  Password & Security
+                </h3>
+                <form
+                  onSubmit={handlePasswordUpdate}
+                  className="space-y-4 p-4 bg-stone-800 rounded-lg"
+                >
+                  <div>
+                    <label className="block text-amber-200 mb-2">Current Password</label>
+                    <input
+                      type="password"
+                      value={passwordData.currentPassword}
+                      onChange={(e) =>
+                        setPasswordData((prev) => ({
+                          ...prev,
+                          currentPassword: e.target.value,
+                        }))
+                      }
+                      className="w-full bg-stone-900 border border-amber-500/30 rounded-lg p-3 text-amber-200"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-amber-200 mb-2">New Password</label>
+                    <input
+                      type="password"
+                      value={passwordData.newPassword}
+                      onChange={(e) =>
+                        setPasswordData((prev) => ({
+                          ...prev,
+                          newPassword: e.target.value,
+                        }))
+                      }
+                      className="w-full bg-stone-900 border border-amber-500/30 rounded-lg p-3 text-amber-200"
+                      minLength={8}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-amber-200 mb-2">Confirm New Password</label>
+                    <input
+                      type="password"
+                      value={passwordData.confirmPassword}
+                      onChange={(e) =>
+                        setPasswordData((prev) => ({
+                          ...prev,
+                          confirmPassword: e.target.value,
+                        }))
+                      }
+                      className="w-full bg-stone-900 border border-amber-500/30 rounded-lg p-3 text-amber-200"
+                      minLength={8}
+                      required
+                    />
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={updatingPassword}
+                      className="bg-gold-gradient px-5 py-2 rounded-full font-semibold text-black disabled:opacity-60"
+                    >
+                      {updatingPassword ? "Updating..." : "Change Password"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+
               <div>
                 <h3 className="text-xl font-bold mb-4 text-amber-300">
                   Danger Zone
@@ -526,13 +851,18 @@ const Profile = () => {
                   <div className="flex justify-between items-center p-4 bg-stone-800 rounded-lg">
                     <div>
                       <h4 className="font-medium text-amber-200">
-                        Logout from all devices
+                        Logout from all sessions
                       </h4>
                       <p className="text-amber-300 text-sm">
-                        Sign out from all devices except this one
+                        Immediately revoke your active sessions on all devices.
                       </p>
                     </div>
-                    <button className="bg-amber-600 px-4 py-2 rounded-lg hover:bg-amber-500 transition-colors text-black">
+                    <button
+                      type="button"
+                      onClick={handleLogoutAllDevices}
+                      disabled={runningDangerAction}
+                      className="bg-amber-600 px-4 py-2 rounded-lg hover:bg-amber-500 transition-colors text-black disabled:opacity-60"
+                    >
                       Logout All
                     </button>
                   </div>
@@ -546,8 +876,10 @@ const Profile = () => {
                       </p>
                     </div>
                     <button
-                      className="bg-amber-700 px-4 py-2 rounded-lg hover:bg-amber-600 transition-colors text-black"
-                      onClick={logout}
+                      type="button"
+                      className="bg-amber-700 px-4 py-2 rounded-lg hover:bg-amber-600 transition-colors text-black disabled:opacity-60"
+                      onClick={handleDeleteAccount}
+                      disabled={runningDangerAction}
                     >
                       Delete Account
                     </button>

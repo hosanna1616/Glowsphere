@@ -25,6 +25,10 @@ app.set("trust proxy", 1);
 const defaultAllowedOrigins = [
   "http://localhost:5173",
   "http://127.0.0.1:5173",
+  "http://localhost",
+  "http://127.0.0.1",
+  "http://localhost:80",
+  "http://127.0.0.1:80",
 ];
 const envAllowedOrigins = (process.env.CORS_ORIGINS || "")
   .split(",")
@@ -33,7 +37,9 @@ const envAllowedOrigins = (process.env.CORS_ORIGINS || "")
 const allowedOrigins = [
   ...new Set([...defaultAllowedOrigins, ...envAllowedOrigins]),
 ];
-const isAllowedOrigin = (origin) => !origin || allowedOrigins.includes(origin);
+const localhostPortPattern = /^https?:\/\/(localhost|127\.0\.0\.1):\d+$/i;
+const isAllowedOrigin = (origin) =>
+  !origin || allowedOrigins.includes(origin) || localhostPortPattern.test(origin);
 const corsOriginHandler = (origin, callback) => {
   if (isAllowedOrigin(origin)) {
     callback(null, true);
@@ -123,6 +129,12 @@ app.use(errorHandler);
 // Socket.IO connection handling
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
+
+  socket.on("auth:user", (data) => {
+    if (!data?.userId) return;
+    const userRoom = `user:${data.userId}`;
+    socket.join(userRoom);
+  });
 
   // Join room
   socket.on("join_room", (data) => {

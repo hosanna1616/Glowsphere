@@ -7,6 +7,7 @@ import {
   MessageCircle,
   Heart,
   User,
+  Bookmark,
   BookOpen,
   Target,
   Lightbulb,
@@ -27,6 +28,7 @@ const Sidebar = () => {
   const navItems = [
     { name: "Home", path: "/", icon: Home, shortName: "Home" },
     { name: "Feed", path: "/feed", icon: Home, shortName: "Feed" },
+    { name: "Saved", path: "/saved", icon: Bookmark, shortName: "Saved" },
     { name: "Echoes", path: "/echoes", icon: MessageCircle, shortName: "Echoes" },
     { name: "Pulse", path: "/pulse", icon: Heart, shortName: "Pulse" },
     { name: "Lumina Mirror", path: "/lumina-mirror", icon: BookOpen, shortName: "Logs" },

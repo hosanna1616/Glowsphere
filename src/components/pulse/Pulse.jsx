@@ -1,103 +1,8 @@
-import React, { useState } from "react";
+import React from "react";
 import { useNavigate } from "react-router-dom";
 
 const Pulse = () => {
   const navigate = useNavigate();
-  const [activities, setActivities] = useState([
-    {
-      id: 1,
-      user: "AlexJohnson",
-      action: "completed",
-      item: "React Fundamentals Course",
-      time: "10 minutes ago",
-      type: "achievement",
-    },
-    {
-      id: 2,
-      user: "SamSmith",
-      action: "started a new",
-      item: "discussion: Best practices for React state management",
-      time: "25 minutes ago",
-      type: "discussion",
-    },
-    {
-      id: 3,
-      user: "TaylorBrown",
-      action: "shared a",
-      item: "resource: UI/UX Design Principles Handbook",
-      time: "1 hour ago",
-      type: "resource",
-    },
-    {
-      id: 4,
-      user: "JordanLee",
-      action: "joined the",
-      item: "community",
-      time: "2 hours ago",
-      type: "community",
-    },
-    {
-      id: 5,
-      user: "CaseyWilliams",
-      action: "earned the",
-      item: '"JavaScript Master" badge',
-      time: "3 hours ago",
-      type: "badge",
-    },
-    {
-      id: 6,
-      user: "RileyDavis",
-      action: "posted in",
-      item: "General Discussion: How to stay motivated while learning to code?",
-      time: "5 hours ago",
-      type: "post",
-    },
-  ]);
-
-  const [filter, setFilter] = useState("all");
-
-  const filteredActivities =
-    filter === "all"
-      ? activities
-      : activities.filter((activity) => activity.type === filter);
-
-  const getTypeIcon = (type) => {
-    switch (type) {
-      case "achievement":
-        return "🏆";
-      case "discussion":
-        return "💬";
-      case "resource":
-        return "📚";
-      case "community":
-        return "👥";
-      case "badge":
-        return "🥇";
-      case "post":
-        return "📝";
-      default:
-        return "✨";
-    }
-  };
-
-  const getTypeColor = (type) => {
-    switch (type) {
-      case "achievement":
-        return "from-amber-600 to-yellow-600";
-      case "discussion":
-        return "from-amber-500 to-amber-300";
-      case "resource":
-        return "from-amber-400 to-amber-200";
-      case "community":
-        return "from-amber-600 to-amber-500";
-      case "badge":
-        return "from-amber-500 to-yellow-600";
-      case "post":
-        return "from-amber-400 to-amber-600";
-      default:
-        return "from-amber-600 to-yellow-600";
-    }
-  };
 
   return (
     <div className="py-8">
@@ -111,102 +16,55 @@ const Pulse = () => {
         <h1 className="text-3xl font-bold text-amber-400">Pulse</h1>
       </div>
 
-      {/* Activity Filters */}
-      <div className="flex flex-wrap justify-center gap-2 mb-8">
-        <button
-          className={`px-4 py-2 rounded-full ${
-            filter === "all"
-              ? "bg-gold-gradient text-black font-semibold"
-              : "bg-card-bg border border-amber-500/30 text-amber-200"
-          } hover:opacity-90 transition-all`}
-          onClick={() => setFilter("all")}
-        >
-          All Activities
-        </button>
-        <button
-          className={`px-4 py-2 rounded-full ${
-            filter === "achievement"
-              ? "bg-gold-gradient text-black font-semibold"
-              : "bg-card-bg border border-amber-500/30 text-amber-200"
-          } hover:opacity-90 transition-all`}
-          onClick={() => setFilter("achievement")}
-        >
-          Achievements
-        </button>
-        <button
-          className={`px-4 py-2 rounded-full ${
-            filter === "discussion"
-              ? "bg-gold-gradient text-black font-semibold"
-              : "bg-card-bg border border-amber-500/30 text-amber-200"
-          } hover:opacity-90 transition-all`}
-          onClick={() => setFilter("discussion")}
-        >
-          Discussions
-        </button>
-        <button
-          className={`px-4 py-2 rounded-full ${
-            filter === "resource"
-              ? "bg-gold-gradient text-black font-semibold"
-              : "bg-card-bg border border-amber-500/30 text-amber-200"
-          } hover:opacity-90 transition-all`}
-          onClick={() => setFilter("resource")}
-        >
-          Resources
-        </button>
-      </div>
+      <div className="max-w-3xl mx-auto">
+        <div className="relative overflow-hidden bg-card-bg backdrop-blur-sm rounded-2xl border border-amber-500/30 p-8 md:p-10">
+          <div className="absolute -top-14 -right-14 w-44 h-44 rounded-full bg-amber-400/10 blur-2xl" />
+          <div className="absolute -bottom-16 -left-12 w-44 h-44 rounded-full bg-amber-600/10 blur-2xl" />
 
-      {/* Activity Feed */}
-      <div className="space-y-4">
-        {filteredActivities.map((activity) => (
-          <div
-            key={activity.id}
-            className="bg-card-bg backdrop-blur-sm rounded-xl p-6 border border-amber-500/30 hover:border-amber-400 transition-colors"
-          >
-            <div className="flex items-start">
-              <div
-                className={`w-12 h-12 rounded-full bg-gradient-to-r ${getTypeColor(
-                  activity.type
-                )} flex items-center justify-center text-black text-xl mr-4`}
-              >
-                {getTypeIcon(activity.type)}
+          <div className="relative">
+            <div className="w-20 h-20 mx-auto mb-5 rounded-full bg-gold-gradient flex items-center justify-center text-black text-3xl shadow-[0_0_25px_rgba(245,158,11,0.4)]">
+              ⚡
+            </div>
+
+            <h2 className="text-3xl md:text-4xl font-bold text-amber-300 text-center mb-3">
+              Pulse Is Coming Soon
+            </h2>
+            <p className="text-amber-100/90 text-center max-w-xl mx-auto mb-8">
+              We are crafting a beautiful new Pulse experience to help you track
+              your emotional rhythm, energy, and wellbeing in one place.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-8">
+              <div className="rounded-xl border border-amber-500/20 bg-stone-900/50 px-4 py-3 text-amber-200 text-sm text-center">
+                Smart Mood Timeline
               </div>
-              <div className="flex-1">
-                <p className="text-lg">
-                  <span className="font-bold text-amber-300">
-                    {activity.user}
-                  </span>
-                  <span className="text-amber-200"> {activity.action} </span>
-                  <span className="font-medium text-amber-300">
-                    {activity.item}
-                  </span>
-                </p>
-                <p className="text-gray-300 text-sm mt-1">{activity.time}</p>
+              <div className="rounded-xl border border-amber-500/20 bg-stone-900/50 px-4 py-3 text-amber-200 text-sm text-center">
+                Cycle-Aware Insights
+              </div>
+              <div className="rounded-xl border border-amber-500/20 bg-stone-900/50 px-4 py-3 text-amber-200 text-sm text-center">
+                Gentle Wellness Nudges
               </div>
             </div>
-          </div>
-        ))}
-      </div>
 
-      {/* Stats Section */}
-      <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-card-bg backdrop-blur-sm rounded-xl p-6 border border-amber-500/30 text-center">
-          <div className="text-3xl font-bold bg-clip-text text-transparent bg-gold-gradient mb-2">
-            1,248
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <button
+                onClick={() => navigate("/feed")}
+                className="px-6 py-2.5 rounded-full bg-gold-gradient text-black font-semibold hover:opacity-90 transition-opacity"
+              >
+                Back to Feed
+              </button>
+              <button
+                onClick={() => navigate("/profile")}
+                className="px-6 py-2.5 rounded-full border border-amber-500/30 text-amber-200 hover:bg-stone-800 transition-colors"
+              >
+                Update Profile Goals
+              </button>
+            </div>
           </div>
-          <div className="text-amber-200">Active Members</div>
         </div>
-        <div className="bg-card-bg backdrop-blur-sm rounded-xl p-6 border border-amber-500/30 text-center">
-          <div className="text-3xl font-bold bg-clip-text text-transparent bg-gold-gradient mb-2">
-            342
-          </div>
-          <div className="text-amber-200">New This Week</div>
-        </div>
-        <div className="bg-card-bg backdrop-blur-sm rounded-xl p-6 border border-amber-500/30 text-center">
-          <div className="text-3xl font-bold bg-clip-text text-transparent bg-gold-gradient mb-2">
-            12.4k
-          </div>
-          <div className="text-amber-200">Total Posts</div>
-        </div>
+        <p className="text-center text-amber-300/70 text-sm mt-4">
+          Thank you for growing with GlowSphere.
+        </p>
       </div>
     </div>
   );

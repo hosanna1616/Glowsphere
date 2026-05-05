@@ -1,4 +1,5 @@
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 const mongoose = require("mongoose");
 const User = require("../models/User");
 
@@ -14,14 +15,54 @@ const parseMaybeJson = (value, fallback = null) => {
 };
 
 // Generate JWT token
-const generateToken = (userId) => {
+const generateToken = (user) => {
   return jwt.sign(
-    { userId },
+    {
+      userId: user._id,
+      tokenVersion: user.tokenVersion || 0,
+    },
     process.env.JWT_SECRET || "glowsphere_secret_key",
     {
       expiresIn: "30d",
-    }
+    },
   );
+};
+
+const serializeUser = (user) => ({
+  _id: user._id,
+  name: user.name,
+  username: user.username,
+  email: user.email,
+  avatar: user.avatar,
+  bio: user.bio,
+  location: user.location,
+  lastPeriod: user.lastPeriod,
+  cycleLength: user.cycleLength,
+  onboardingComplete: user.onboardingComplete,
+  glowPoints: user.glowPoints,
+  bloomGarden: user.bloomGarden,
+  fireSpirits: user.fireSpirits,
+  emberCrownUntil: user.emberCrownUntil,
+  role: user.role,
+  settings: user.settings,
+  createdAt: user.createdAt,
+  updatedAt: user.updatedAt,
+});
+
+const areFriends = (viewer, targetId) =>
+  (viewer?.friends || []).some(
+    (friendId) => String(friendId) === String(targetId),
+  );
+
+const canViewProfile = (viewer, targetUser) => {
+  if (!viewer || !targetUser) return false;
+  if (String(viewer._id) === String(targetUser._id)) return true;
+  const visibility = targetUser.settings?.profileVisibility || "public";
+  if (visibility === "public") return true;
+  if (visibility === "friends") {
+    return areFriends(viewer, targetUser._id);
+  }
+  return false;
 };
 
 // Register user
@@ -79,22 +120,8 @@ const registerUser = async (req, res) => {
 
     if (user) {
       res.status(201).json({
-        _id: user._id,
-        name: user.name,
-        username: user.username,
-        email: user.email,
-        avatar: user.avatar,
-        bio: user.bio,
-        location: user.location,
-        lastPeriod: user.lastPeriod,
-        cycleLength: user.cycleLength,
-        onboardingComplete: user.onboardingComplete,
-        glowPoints: user.glowPoints,
-        bloomGarden: user.bloomGarden,
-        fireSpirits: user.fireSpirits,
-        emberCrownUntil: user.emberCrownUntil,
-        role: user.role,
-        token: generateToken(user._id),
+        ...serializeUser(user),
+        token: generateToken(user),
       });
     } else {
       res.status(400).json({ message: "Invalid user data" });
@@ -135,7 +162,7 @@ const authUser = async (req, res) => {
 
     // Compare password
     const isPasswordValid = await user.comparePassword(password);
-    
+
     if (!isPasswordValid) {
       return res.status(401).json({ message: "Invalid email or password" });
     }
@@ -155,22 +182,8 @@ const authUser = async (req, res) => {
     }
 
     res.json({
-      _id: user._id,
-      name: user.name,
-      username: user.username,
-      email: user.email,
-      avatar: user.avatar,
-      bio: user.bio,
-      location: user.location,
-      lastPeriod: user.lastPeriod,
-      cycleLength: user.cycleLength,
-      onboardingComplete: user.onboardingComplete,
-      glowPoints: user.glowPoints,
-      bloomGarden: user.bloomGarden,
-      fireSpirits: user.fireSpirits,
-      emberCrownUntil: user.emberCrownUntil,
-      role: user.role,
-      token: generateToken(user._id),
+      ...serializeUser(user),
+      token: generateToken(user),
     });
   } catch (error) {
     console.error("Login error:", error);
@@ -185,24 +198,10 @@ const getUserProfile = async (req, res) => {
 
     if (user) {
       res.json({
-        _id: user._id,
-        name: user.name,
-        username: user.username,
-        email: user.email,
-        bio: user.bio,
-        location: user.location,
-        avatar: user.avatar,
-        lastPeriod: user.lastPeriod,
-        cycleLength: user.cycleLength,
+        ...serializeUser(user),
         interests: user.interests,
         goals: user.goals,
         challenges: user.challenges,
-        glowPoints: user.glowPoints,
-        bloomGarden: user.bloomGarden,
-        fireSpirits: user.fireSpirits,
-        emberCrownUntil: user.emberCrownUntil,
-        role: user.role,
-        createdAt: user.createdAt,
       });
     } else {
       res.status(404).json({ message: "User not found" });
@@ -219,7 +218,8 @@ const updateUserProfile = async (req, res) => {
 
     if (user) {
       const nextName = req.body.name?.trim() || user.name;
-      const nextUsername = req.body.username?.trim().toLowerCase() || user.username;
+      const nextUsername =
+        req.body.username?.trim().toLowerCase() || user.username;
       const nextEmail = req.body.email?.trim().toLowerCase() || user.email;
 
       const duplicateUser = await User.findOne({
@@ -239,7 +239,7 @@ const updateUserProfile = async (req, res) => {
       user.bio = req.body.bio !== undefined ? req.body.bio : user.bio;
       user.location =
         req.body.location !== undefined ? req.body.location : user.location;
-      
+
       if (req.file) {
         if (req.file.secure_url) {
           user.avatar = req.file.secure_url;
@@ -257,7 +257,7 @@ const updateUserProfile = async (req, res) => {
         // If avatar is provided as URL string
         user.avatar = req.body.avatar;
       }
-      
+
       user.lastPeriod = req.body.lastPeriod
         ? new Date(req.body.lastPeriod)
         : user.lastPeriod;
@@ -290,24 +290,11 @@ const updateUserProfile = async (req, res) => {
       const updatedUser = await user.save();
 
       res.json({
-        _id: updatedUser._id,
-        name: updatedUser.name,
-        username: updatedUser.username,
-        email: updatedUser.email,
-        bio: updatedUser.bio,
-        location: updatedUser.location,
-        avatar: updatedUser.avatar,
-        lastPeriod: updatedUser.lastPeriod,
-        cycleLength: updatedUser.cycleLength,
+        ...serializeUser(updatedUser),
         interests: updatedUser.interests,
         goals: updatedUser.goals,
         challenges: updatedUser.challenges,
-        glowPoints: updatedUser.glowPoints,
-        bloomGarden: updatedUser.bloomGarden,
-        fireSpirits: updatedUser.fireSpirits,
-        emberCrownUntil: updatedUser.emberCrownUntil,
-        role: updatedUser.role,
-        token: generateToken(updatedUser._id),
+        token: generateToken(updatedUser),
       });
     } else {
       res.status(404).json({ message: "User not found" });
@@ -317,25 +304,166 @@ const updateUserProfile = async (req, res) => {
   }
 };
 
+const updateUserSettings = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const nextSettings = req.body || {};
+    user.settings = {
+      ...user.settings,
+      ...nextSettings,
+    };
+    const updatedUser = await user.save();
+
+    res.json({
+      settings: updatedUser.settings,
+      user: serializeUser(updatedUser),
+      message: "Settings updated successfully",
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+const changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res
+        .status(400)
+        .json({ message: "Current password and new password are required" });
+    }
+    if (String(newPassword).length < 8) {
+      return res
+        .status(400)
+        .json({ message: "New password must be at least 8 characters" });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const validCurrentPassword = await user.comparePassword(currentPassword);
+    if (!validCurrentPassword) {
+      return res.status(400).json({ message: "Current password is incorrect" });
+    }
+
+    user.password = newPassword;
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
+    await user.save();
+
+    res.json({
+      message: "Password updated successfully. Please sign in again.",
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+const logoutAllSessions = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
+    await user.save();
+    res.json({ message: "Logged out from all devices successfully" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+const deleteAccount = async (req, res) => {
+  try {
+    const { password } = req.body;
+    if (!password) {
+      return res.status(400).json({ message: "Password is required" });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const validPassword = await user.comparePassword(password);
+    if (!validPassword) {
+      return res.status(400).json({ message: "Password is incorrect" });
+    }
+
+    const suffix = `${Date.now()}_${crypto.randomBytes(3).toString("hex")}`;
+    user.isActive = false;
+    user.name = "Deleted User";
+    user.username = `deleted_${suffix}`;
+    user.email = `deleted_${suffix}@glowsphere.local`;
+    user.bio = "";
+    user.location = "";
+    user.avatar = "";
+    user.friends = [];
+    user.settings = {
+      ...user.settings,
+      profileVisibility: "private",
+      discoverableByEmail: false,
+      allowTagging: false,
+      securityAlerts: false,
+      marketingEmails: false,
+    };
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
+    await user.save();
+
+    res.json({ message: "Account deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // Search users by username
 const searchUsers = async (req, res) => {
   try {
-    const { username } = req.query;
-
-    if (!username || username.length < 2) {
+    const rawQuery = (req.query.username || req.query.query || "").trim();
+    if (!rawQuery || rawQuery.length < 2) {
       return res.status(400).json({
-        message: "Username must be at least 2 characters",
+        message: "Search query must be at least 2 characters",
       });
     }
 
-    const users = await User.find({
-      username: { $regex: username, $options: "i" },
-      isActive: true,
-    })
-      .select("_id username name avatar")
-      .limit(10);
+    const normalizedQuery = rawQuery.toLowerCase();
+    const isEmailQuery = normalizedQuery.includes("@");
 
-    res.json(users);
+    const baseFilter = { isActive: true };
+    if (isEmailQuery) {
+      baseFilter.email = { $regex: normalizedQuery, $options: "i" };
+    } else {
+      baseFilter.username = { $regex: normalizedQuery, $options: "i" };
+    }
+
+    const users = await User.find({
+      ...baseFilter,
+    })
+      .select("_id username name avatar email settings friends")
+      .limit(30);
+
+    const filteredUsers = users
+      .filter((candidate) => {
+        const isSelf = String(candidate._id) === String(req.user._id);
+        if (isEmailQuery && !isSelf && !candidate.settings?.discoverableByEmail) {
+          return false;
+        }
+        return canViewProfile(req.user, candidate);
+      })
+      .slice(0, 10)
+      .map((candidate) => ({
+        _id: candidate._id,
+        username: candidate.username,
+        name: candidate.name,
+        avatar: candidate.avatar,
+      }));
+
+    res.json(filteredUsers);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -364,7 +492,9 @@ const addFriend = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
     if (friend._id.toString() === req.user._id.toString()) {
-      return res.status(400).json({ message: "You cannot add yourself as friend" });
+      return res
+        .status(400)
+        .json({ message: "You cannot add yourself as friend" });
     }
 
     const me = await User.findById(req.user._id);
@@ -372,7 +502,7 @@ const addFriend = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
     const alreadyFriends = me.friends.some(
-      (friendId) => friendId.toString() === friend._id.toString()
+      (friendId) => friendId.toString() === friend._id.toString(),
     );
     if (!alreadyFriends) {
       me.friends.push(friend._id);
@@ -381,7 +511,7 @@ const addFriend = async (req, res) => {
 
     const reciprocal = await User.findById(friend._id);
     const reciprocalExists = reciprocal.friends.some(
-      (friendId) => friendId.toString() === me._id.toString()
+      (friendId) => friendId.toString() === me._id.toString(),
     );
     if (!reciprocalExists) {
       reciprocal.friends.push(me._id);
@@ -407,6 +537,10 @@ module.exports = {
   authUser,
   getUserProfile,
   updateUserProfile,
+  updateUserSettings,
+  changePassword,
+  logoutAllSessions,
+  deleteAccount,
   searchUsers,
   getFriends,
   addFriend,

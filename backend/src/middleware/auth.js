@@ -20,6 +20,12 @@ const auth = async (req, res, next) => {
     if (!user) {
       return res.status(401).json({ message: "Token invalid, access denied" });
     }
+    if ((decoded.tokenVersion ?? 0) !== (user.tokenVersion ?? 0)) {
+      return res.status(401).json({ message: "Session expired, please sign in again" });
+    }
+    if (!user.isActive) {
+      return res.status(401).json({ message: "Account is inactive" });
+    }
 
     req.user = user;
     next();

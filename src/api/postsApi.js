@@ -12,6 +12,16 @@ class PostsApi {
     }
   }
 
+  async getSavedPosts() {
+    try {
+      const response = await apiClient.get("/posts/saved", true);
+      return response;
+    } catch (error) {
+      console.error("Failed to fetch saved posts:", error);
+      throw error;
+    }
+  }
+
   // Get post by ID
   async getPostById(postId) {
     try {
@@ -82,7 +92,7 @@ class PostsApi {
         error.message.includes("connect to server")
       ) {
         throw new Error(
-          "Unable to connect to server. Please check your internet connection and ensure the backend is running."
+          "Unable to connect to server. Please check your internet connection and ensure the backend is running.",
         );
       }
       throw error;
@@ -102,13 +112,23 @@ class PostsApi {
   // Add comment to post
   async addComment(postId, text) {
     try {
-      return await apiClient.post(
-        `/posts/${postId}/comments`,
-        { text },
-        true
-      );
+      return await apiClient.post(`/posts/${postId}/comments`, { text }, true);
     } catch (error) {
       console.error("Failed to add comment:", error);
+      throw error;
+    }
+  }
+
+  // Add reply to comment
+  async addReply(postId, commentId, text) {
+    try {
+      return await apiClient.post(
+        `/posts/${postId}/comments/${commentId}/replies`,
+        { text },
+        true,
+      );
+    } catch (error) {
+      console.error("Failed to add reply:", error);
       throw error;
     }
   }
@@ -118,7 +138,7 @@ class PostsApi {
     try {
       return await apiClient.delete(
         `/posts/${postId}/comments/${commentId}`,
-        true
+        true,
       );
     } catch (error) {
       console.error("Failed to delete comment:", error);
@@ -156,20 +176,24 @@ class PostsApi {
 
       if (mediaFile || postData?.removeMedia) {
         const formData = new FormData();
-        if (postData?.content != null) formData.append("content", postData.content);
+        if (postData?.content != null)
+          formData.append("content", postData.content);
         if (postData?.removeMedia) formData.append("removeMedia", "true");
         if (Array.isArray(postData?.tags)) {
           postData.tags.forEach((tag) => formData.append("tags", tag));
         }
         if (mediaFile) formData.append("media", mediaFile);
 
-        const response = await fetch(`${apiClient.getApiBaseUrl()}/posts/${postId}`, {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${token}`,
+        const response = await fetch(
+          `${apiClient.getApiBaseUrl()}/posts/${postId}`,
+          {
+            method: "PUT",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            body: formData,
           },
-          body: formData,
-        });
+        );
 
         if (!response.ok) {
           const errorText = await response.text();
@@ -199,13 +223,13 @@ class PostsApi {
       reason = "Inappropriate content",
       reportCategory = "other",
       additionalDetails = "",
-    } = {}
+    } = {},
   ) {
     try {
       return await apiClient.post(
         `/posts/${postId}/report`,
         { reason, reportCategory, additionalDetails },
-        true
+        true,
       );
     } catch (error) {
       console.error("Failed to report post:", error);
@@ -225,10 +249,9 @@ class PostsApi {
     return apiClient.put(
       `/posts/reports/${postId}/${reportId}/status`,
       { moderationStatus },
-      true
+      true,
     );
   }
 }
 
 export default new PostsApi();
-

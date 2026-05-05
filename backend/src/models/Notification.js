@@ -40,6 +40,16 @@ const notificationSchema = new mongoose.Schema(
         "study_material",
       ],
     },
+    actionPath: {
+      type: String,
+      default: "",
+    },
+    actorUsername: {
+      type: String,
+      default: "",
+      lowercase: true,
+      trim: true,
+    },
   },
   {
     timestamps: true,

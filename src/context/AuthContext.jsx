@@ -47,7 +47,10 @@ export const AuthProvider = ({ children }) => {
     const isOnboardingDone = userData?.onboardingComplete !== false;
     setOnboardingComplete(isOnboardingDone);
     localStorage.setItem("isAuthenticated", "true");
-    localStorage.setItem("onboardingComplete", isOnboardingDone ? "true" : "false");
+    localStorage.setItem(
+      "onboardingComplete",
+      isOnboardingDone ? "true" : "false",
+    );
     // Token is already saved by UserApi.login, but we ensure it's there
     const token = localStorage.getItem("token");
     if (!token) {

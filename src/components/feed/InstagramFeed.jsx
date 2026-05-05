@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Heart, MessageCircle, Send, Bookmark, Ellipsis } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
@@ -20,6 +20,7 @@ const mentionRegex = /@([a-zA-Z0-9._]+)/g;
 
 const InstagramFeed = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const { showToast } = useToast();
   const [posts, setPosts] = useState([]);
@@ -32,6 +33,9 @@ const InstagramFeed = () => {
 
   const [comments, setComments] = useState({});
   const [newComment, setNewComment] = useState({});
+  const [newReply, setNewReply] = useState({});
+  const [showReplyInput, setShowReplyInput] = useState({});
+  const [showReplies, setShowReplies] = useState({});
   const [showComments, setShowComments] = useState({});
   const [showRepostModal, setShowRepostModal] = useState(false);
   const [repostPost, setRepostPost] = useState(null);
@@ -53,6 +57,8 @@ const InstagramFeed = () => {
   const [deletingPostId, setDeletingPostId] = useState(null);
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportingPostId, setReportingPostId] = useState(null);
+  const [activeSharePostId, setActiveSharePostId] = useState(null);
+  const [highlightedSharedPostId, setHighlightedSharedPostId] = useState(null);
   const [reportForm, setReportForm] = useState({
     reportCategory: "harmful_or_dangerous",
     reason: "",
@@ -64,6 +70,9 @@ const InstagramFeed = () => {
   const lastPostRef = useRef(null);
   const fileInputRef = useRef(null);
   const editFileInputRef = useRef(null);
+  const sharedPostFetchAttemptedRef = useRef({});
+  const sharedPostId =
+    new URLSearchParams(location.search).get("sharedPost")?.trim() || "";
 
   // Get user's avatar initial
   const getUserAvatar = (username) => {
@@ -92,7 +101,7 @@ const InstagramFeed = () => {
           className="text-amber-300 hover:text-amber-200 font-medium"
         >
           @{mention}
-        </button>
+        </button>,
       );
       lastIndex = match.index + match[0].length;
     }
@@ -112,10 +121,38 @@ const InstagramFeed = () => {
 
     if (diffInSeconds < 60) return "Just now";
     if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
-    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
-    if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d ago`;
+    if (diffInSeconds < 86400)
+      return `${Math.floor(diffInSeconds / 3600)}h ago`;
+    if (diffInSeconds < 604800)
+      return `${Math.floor(diffInSeconds / 86400)}d ago`;
     return postDate.toLocaleDateString();
   };
+
+  const mapPostToViewModel = (post) => ({
+    id: post._id,
+    username: post.username,
+    displayName: post.authorName || post.username,
+    avatar: resolveMediaUrl(post.authorAvatar) || null,
+    avatarInitial: getUserAvatar(post.authorName || post.username),
+    imageUrl: resolveMediaUrl(post.mediaUrl) || null,
+    caption: post.content,
+    timestamp: formatTimestamp(post.createdAt),
+    likes: post.likes?.length || 0,
+    comments: post.comments?.length || 0,
+    isLiked:
+      post.likes?.some(
+        (like) => like.userId?.toString() === user?._id?.toString(),
+      ) || false,
+    isSaved:
+      post.savedBy?.some(
+        (save) => save.userId?.toString() === user?._id?.toString(),
+      ) || false,
+    mediaType: post.mediaType || "image",
+    commentsList: post.comments || [],
+    createdAt: post.createdAt,
+    userId: post.userId,
+    ownerId: post.userId?._id || post.userId,
+  });
 
   // Load posts from API
   const loadPosts = async (page = 1, append = false) => {
@@ -123,41 +160,19 @@ const InstagramFeed = () => {
       setLoading(true);
       setBackendError(false); // Reset backend error state when attempting to load
       const response = await PostsApi.getPosts(page);
-      
+
       if (!response || !response.posts) {
         throw new Error("Invalid response from server");
       }
-      
-      const formattedPosts = response.posts.map((post) => ({
-        id: post._id,
-        username: post.username,
-        displayName: post.authorName || post.username,
-        avatar: resolveMediaUrl(post.authorAvatar) || null,
-        avatarInitial: getUserAvatar(post.authorName || post.username),
-        imageUrl: resolveMediaUrl(post.mediaUrl) || null,
-        caption: post.content,
-        timestamp: formatTimestamp(post.createdAt),
-        likes: post.likes?.length || 0,
-        comments: post.comments?.length || 0,
-        isLiked: post.likes?.some(
-          (like) => like.userId?.toString() === user?._id?.toString()
-        ) || false,
-        isSaved: post.savedBy?.some(
-          (save) => save.userId?.toString() === user?._id?.toString()
-        ) || false,
-        mediaType: post.mediaType || "image",
-        commentsList: post.comments || [],
-        createdAt: post.createdAt,
-        userId: post.userId,
-        ownerId: post.userId?._id || post.userId,
-      }));
+
+      const formattedPosts = response.posts.map(mapPostToViewModel);
 
       if (append) {
         setPosts((prev) => [...prev, ...formattedPosts]);
       } else {
         setPosts(formattedPosts);
       }
-      
+
       // Initialize comments from loaded posts - ensure they persist after refresh
       formattedPosts.forEach((post) => {
         if (post.commentsList && post.commentsList.length > 0) {
@@ -167,10 +182,15 @@ const InstagramFeed = () => {
               id: comment._id || comment.id,
               _id: comment._id || comment.id,
               username: comment.username,
+              userAvatar: resolveMediaUrl(comment.userAvatar) || "",
               text: comment.text,
               timestamp: comment.timestamp || comment.createdAt,
               avatar: comment.username?.charAt(0) || "U",
               likes: comment.likes || [],
+              replies: (comment.replies || []).map((reply) => ({
+                ...reply,
+                userAvatar: resolveMediaUrl(reply.userAvatar) || "",
+              })),
             })),
           }));
         }
@@ -182,18 +202,22 @@ const InstagramFeed = () => {
     } catch (error) {
       console.error("Failed to load posts:", error);
       const errorMessage = error.message || "Failed to fetch posts";
-      
+
       // Track backend connection errors
-      const isConnectionError = errorMessage.includes("connect to server") || 
-                                errorMessage.includes("Failed to fetch") ||
-                                errorMessage.includes("NetworkError");
-      
+      const isConnectionError =
+        errorMessage.includes("connect to server") ||
+        errorMessage.includes("Failed to fetch") ||
+        errorMessage.includes("NetworkError");
+
       if (isConnectionError) {
         setBackendError(true);
       } else {
         setBackendError(false);
         // Only show toast for non-connection errors to avoid spam
-        if (errorMessage.includes("401") || errorMessage.includes("Unauthorized")) {
+        if (
+          errorMessage.includes("401") ||
+          errorMessage.includes("Unauthorized")
+        ) {
           showToast("Please log in again", "error");
           navigate("/login");
         } else if (!errorMessage.includes("network")) {
@@ -218,6 +242,49 @@ const InstagramFeed = () => {
       setBackendError(false);
     }
   }, [posts]);
+
+  useEffect(() => {
+    if (!sharedPostId) return;
+
+    const sharedPostExists = posts.some(
+      (post) => String(post.id) === String(sharedPostId),
+    );
+
+    const focusSharedPost = () => {
+      const target = document.getElementById(`post-${sharedPostId}`);
+      if (!target) return;
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      setHighlightedSharedPostId(sharedPostId);
+      setTimeout(() => setHighlightedSharedPostId(null), 2200);
+    };
+
+    if (sharedPostExists) {
+      setShowComments((prev) => ({ ...prev, [sharedPostId]: true }));
+      setTimeout(focusSharedPost, 150);
+      return;
+    }
+
+    if (sharedPostFetchAttemptedRef.current[sharedPostId]) {
+      return;
+    }
+
+    sharedPostFetchAttemptedRef.current[sharedPostId] = true;
+    (async () => {
+      try {
+        const post = await PostsApi.getPostById(sharedPostId);
+        if (!post?._id) return;
+        const formattedPost = mapPostToViewModel(post);
+        setPosts((prev) => {
+          if (prev.some((item) => String(item.id) === String(formattedPost.id))) {
+            return prev;
+          }
+          return [formattedPost, ...prev];
+        });
+      } catch (error) {
+        showToast("Shared post is unavailable or was removed.", "error");
+      }
+    })();
+  }, [sharedPostId, posts]);
 
   // Check if user liked a post
   const isPostLiked = (post) => {
@@ -296,7 +363,7 @@ const InstagramFeed = () => {
   // Create new post
   const handleCreatePost = async (e) => {
     e.preventDefault();
-    
+
     // Check if user is authenticated
     if (!user) {
       showToast("Please log in to create a post", "warning");
@@ -324,7 +391,7 @@ const InstagramFeed = () => {
         tags: tags.map((tag) => tag.substring(1)),
         category: "general",
       };
-      
+
       await PostsApi.createPost(postData, newPostMedia);
 
       setNewPostContent("");
@@ -339,10 +406,14 @@ const InstagramFeed = () => {
       loadPosts(1, false);
     } catch (error) {
       console.error("Failed to create post:", error);
-      const errorMessage = error.message || "Failed to create post. Please try again.";
-      
+      const errorMessage =
+        error.message || "Failed to create post. Please try again.";
+
       // Handle authentication errors
-      if (errorMessage.includes("Authentication required") || errorMessage.includes("401")) {
+      if (
+        errorMessage.includes("Authentication required") ||
+        errorMessage.includes("401")
+      ) {
         showToast("Please log in again", "error");
         navigate("/login");
       } else {
@@ -359,7 +430,7 @@ const InstagramFeed = () => {
           loadPosts(currentPage + 1, true);
         }
       },
-      { threshold: 0.1 }
+      { threshold: 0.1 },
     );
 
     if (lastPostRef.current) {
@@ -380,7 +451,7 @@ const InstagramFeed = () => {
     // Optimistic update
     const wasLiked = post.isLiked;
     const currentLikes = post.likes || 0;
-    
+
     setPosts((prev) =>
       prev.map((p) =>
         p.id === postId
@@ -389,8 +460,8 @@ const InstagramFeed = () => {
               likes: wasLiked ? currentLikes - 1 : currentLikes + 1,
               isLiked: !wasLiked,
             }
-          : p
-      )
+          : p,
+      ),
     );
 
     try {
@@ -401,11 +472,13 @@ const InstagramFeed = () => {
           p.id === postId
             ? {
                 ...p,
-                likes: result.likeCount || (wasLiked ? currentLikes - 1 : currentLikes + 1),
+                likes:
+                  result.likeCount ||
+                  (wasLiked ? currentLikes - 1 : currentLikes + 1),
                 isLiked: !wasLiked,
               }
-            : p
-        )
+            : p,
+        ),
       );
     } catch (error) {
       console.error("Failed to like post:", error);
@@ -418,8 +491,8 @@ const InstagramFeed = () => {
                 likes: currentLikes,
                 isLiked: wasLiked,
               }
-            : p
-        )
+            : p,
+        ),
       );
       showToast("Failed to like post. Please try again.", "error");
     }
@@ -438,8 +511,8 @@ const InstagramFeed = () => {
               ...p,
               isSaved: !wasSaved,
             }
-          : p
-      )
+          : p,
+      ),
     );
 
     try {
@@ -454,8 +527,8 @@ const InstagramFeed = () => {
                 ...p,
                 isSaved: wasSaved,
               }
-            : p
-        )
+            : p,
+        ),
       );
       showToast("Failed to save post", "error");
     }
@@ -473,7 +546,7 @@ const InstagramFeed = () => {
         const repostContent = repostComment
           ? `${repostComment}\n\nReposted from @${repostPost.username}`
           : `Reposted from @${repostPost.username}`;
-        
+
         await PostsApi.createPost({
           content: `${repostContent}\n\n${repostPost.caption}`,
           tags: [],
@@ -506,10 +579,24 @@ const InstagramFeed = () => {
               id: newCommentData._id || newCommentData.id,
               _id: newCommentData._id || newCommentData.id,
               username: newCommentData.username || user?.username || "You",
+              userAvatar:
+                resolveMediaUrl(newCommentData.userAvatar) ||
+                resolveMediaUrl(user?.avatar) ||
+                "",
               text: newCommentData.text,
-              timestamp: newCommentData.timestamp || newCommentData.createdAt || new Date().toISOString(),
-              avatar: (newCommentData.username || user?.username || "You")?.charAt(0) || "U",
+              timestamp:
+                newCommentData.timestamp ||
+                newCommentData.createdAt ||
+                new Date().toISOString(),
+              avatar:
+                (newCommentData.username || user?.username || "You")?.charAt(
+                  0,
+                ) || "U",
               likes: newCommentData.likes || [],
+              replies: (newCommentData.replies || []).map((reply) => ({
+                ...reply,
+                userAvatar: resolveMediaUrl(reply.userAvatar) || "",
+              })),
             },
           ],
         }));
@@ -517,13 +604,26 @@ const InstagramFeed = () => {
         setPosts((prev) =>
           prev.map((p) =>
             p.id === postId
-              ? { 
-                  ...p, 
+              ? {
+                  ...p,
                   comments: (p.comments || 0) + 1,
-                  commentsList: [...(p.commentsList || []), newCommentData]
+                  commentsList: [
+                    ...(p.commentsList || []),
+                    {
+                      ...newCommentData,
+                      userAvatar:
+                        resolveMediaUrl(newCommentData.userAvatar) ||
+                        resolveMediaUrl(user?.avatar) ||
+                        "",
+                      replies: (newCommentData.replies || []).map((reply) => ({
+                        ...reply,
+                        userAvatar: resolveMediaUrl(reply.userAvatar) || "",
+                      })),
+                    },
+                  ],
                 }
-              : p
-          )
+              : p,
+          ),
         );
         setNewComment((prev) => ({ ...prev, [postId]: "" }));
         showToast("Comment added!", "success");
@@ -541,8 +641,117 @@ const InstagramFeed = () => {
     }));
   };
 
+  const toggleReplyInput = (postId, commentId) => {
+    const key = `${postId}:${commentId}`;
+    setShowReplyInput((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
+
+  const toggleReplies = (postId, commentId) => {
+    const key = `${postId}:${commentId}`;
+    setShowReplies((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
+
+  const handleAddReply = async (postId, commentId) => {
+    const key = `${postId}:${commentId}`;
+    const replyText = newReply[key];
+    if (!replyText?.trim()) return;
+
+    try {
+      const createdReply = await PostsApi.addReply(
+        postId,
+        commentId,
+        replyText.trim(),
+      );
+      setPosts((prev) =>
+        prev.map((post) => {
+          if (post.id !== postId) return post;
+          return {
+            ...post,
+            commentsList: (post.commentsList || []).map((comment) => {
+              const currentCommentId = comment._id || comment.id;
+              if (String(currentCommentId) !== String(commentId)) {
+                return comment;
+              }
+              return {
+                ...comment,
+                replies: [
+                  ...(comment.replies || []),
+                  {
+                    ...createdReply,
+                    userAvatar:
+                      resolveMediaUrl(createdReply.userAvatar) ||
+                      resolveMediaUrl(user?.avatar) ||
+                      "",
+                  },
+                ],
+              };
+            }),
+          };
+        }),
+      );
+      setNewReply((prev) => ({ ...prev, [key]: "" }));
+      setShowReplies((prev) => ({ ...prev, [key]: true }));
+      showToast("Reply added!", "success");
+    } catch (error) {
+      console.error("Failed to add reply:", error);
+      showToast("Failed to add reply. Please try again.", "error");
+    }
+  };
+
   const togglePostMenu = (postId) => {
     setActivePostMenu((prev) => (prev === postId ? null : postId));
+  };
+
+  const toggleShareMenu = (postId) => {
+    setActiveSharePostId((prev) => (prev === postId ? null : postId));
+  };
+
+  const closeShareMenu = () => {
+    setActiveSharePostId(null);
+  };
+
+  const getSharePayload = (post) => {
+    const configuredBaseUrl = import.meta.env.VITE_PUBLIC_APP_URL;
+    const appBaseUrl = (configuredBaseUrl || window.location.origin).replace(
+      /\/+$/,
+      "",
+    );
+    // Use a stable, shareable URL that works in production deployments.
+    const postLink = `${appBaseUrl}/feed?sharedPost=${encodeURIComponent(post.id)}`;
+    const shareText = `${post.displayName}: ${post.caption || "Check this post on GlowSphere"}`;
+    return { postLink, shareText };
+  };
+
+  const shareToTelegram = (post) => {
+    const { postLink, shareText } = getSharePayload(post);
+    const url = `https://t.me/share/url?url=${encodeURIComponent(postLink)}&text=${encodeURIComponent(shareText)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+    closeShareMenu();
+  };
+
+  const shareToWhatsApp = (post) => {
+    const { postLink, shareText } = getSharePayload(post);
+    const url = `https://wa.me/?text=${encodeURIComponent(`${shareText}\n${postLink}`)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+    closeShareMenu();
+  };
+
+  const copyPostLink = async (post) => {
+    try {
+      const { postLink } = getSharePayload(post);
+      await navigator.clipboard.writeText(postLink);
+      showToast("Post link copied!", "success");
+    } catch (error) {
+      showToast("Failed to copy link", "error");
+    } finally {
+      closeShareMenu();
+    }
   };
 
   const closePostMenu = () => {
@@ -591,10 +800,14 @@ const InstagramFeed = () => {
     }
 
     try {
-      const updatedPost = await PostsApi.updatePost(editingPost.id, {
-        content: updatedContent,
-        removeMedia: removeEditMedia,
-      }, editPostMedia);
+      const updatedPost = await PostsApi.updatePost(
+        editingPost.id,
+        {
+          content: updatedContent,
+          removeMedia: removeEditMedia,
+        },
+        editPostMedia,
+      );
       setPosts((prev) =>
         prev.map((post) =>
           post.id === editingPost.id
@@ -602,13 +815,16 @@ const InstagramFeed = () => {
                 ...post,
                 caption: updatedPost.content,
                 displayName: updatedPost.authorName || post.displayName,
-                avatar: resolveMediaUrl(updatedPost.authorAvatar) || post.avatar,
-                avatarInitial: getUserAvatar(updatedPost.authorName || post.displayName),
+                avatar:
+                  resolveMediaUrl(updatedPost.authorAvatar) || post.avatar,
+                avatarInitial: getUserAvatar(
+                  updatedPost.authorName || post.displayName,
+                ),
                 imageUrl: resolveMediaUrl(updatedPost.mediaUrl) || null,
                 mediaType: updatedPost.mediaType || "image",
               }
-            : post
-        )
+            : post,
+        ),
       );
       setShowEditPostModal(false);
       setEditingPost(null);
@@ -637,11 +853,10 @@ const InstagramFeed = () => {
     if (!reportingPostId) return;
     try {
       const selectedLabel =
-        REPORT_OPTIONS.find((opt) => opt.id === reportForm.reportCategory)?.label ||
-        "Other";
+        REPORT_OPTIONS.find((opt) => opt.id === reportForm.reportCategory)
+          ?.label || "Other";
       const reason =
-        reportForm.reason.trim() ||
-        `Reported for: ${selectedLabel}`;
+        reportForm.reason.trim() || `Reported for: ${selectedLabel}`;
 
       await PostsApi.reportPost(reportingPostId, {
         reportCategory: reportForm.reportCategory,
@@ -654,13 +869,15 @@ const InstagramFeed = () => {
       setReportingPostId(null);
       showToast(
         "Report submitted. This post is now hidden from your feed while we review it.",
-        "success"
+        "success",
       );
     } catch (error) {
       const errorMessage = error.message || "Failed to report post";
       showToast(errorMessage, "error");
     }
   };
+
+  const visiblePosts = posts.filter((post) => !hiddenReportedPosts[post.id]);
 
   return (
     <div
@@ -677,315 +894,505 @@ const InstagramFeed = () => {
         </div>
       )}
 
-        {/* Header with Back Button */}
-        <div className="bg-black border-b border-stone-800 px-4 py-3 flex items-center justify-between">
-          <button
-            onClick={() => navigate(-1)}
-            className="text-amber-300 hover:text-amber-200 text-xl"
-          >
-            ←
-          </button>
-          <h1 className="text-xl font-bold text-amber-300">Feed</h1>
-          <button
-            onClick={() => setShowCreatePost(true)}
-            className="bg-gold-gradient px-4 py-2 rounded-full font-semibold text-black hover:opacity-90 transition-opacity text-sm"
-          >
-            + Post
-          </button>
-        </div>
+      {/* Header with Back Button */}
+      <div className="bg-black border-b border-stone-800 px-4 py-3 flex items-center justify-between">
+        <button
+          onClick={() => navigate(-1)}
+          className="text-amber-300 hover:text-amber-200 text-xl"
+        >
+          ←
+        </button>
+        <h1 className="text-xl font-bold text-amber-300">Feed</h1>
+        <button
+          onClick={() => setShowCreatePost(true)}
+          className="bg-gold-gradient px-4 py-2 rounded-full font-semibold text-black hover:opacity-90 transition-opacity text-sm"
+        >
+          + Post
+        </button>
+      </div>
 
-        {/* Stories Row */}
-        {stories.length > 0 && (
-          <div className="bg-black border-b border-stone-800 px-4 py-3 overflow-x-auto overflow-y-hidden">
-            <div className="flex space-x-4">
-              {stories.map((story) => (
+      {/* Stories Row */}
+      {stories.length > 0 && (
+        <div className="bg-black border-b border-stone-800 px-4 py-3 overflow-x-auto overflow-y-hidden">
+          <div className="flex space-x-4">
+            {stories.map((story) => (
+              <div
+                key={story.id}
+                className="flex flex-col items-center flex-shrink-0"
+              >
                 <div
-                  key={story.id}
-                  className="flex flex-col items-center flex-shrink-0"
+                  className={`w-16 h-16 rounded-full flex items-center justify-center text-white font-bold mb-1 ${
+                    story.hasNew
+                      ? "bg-gradient-to-tr from-amber-500 via-pink-500 to-purple-500 p-0.5"
+                      : "bg-stone-700 border-2 border-stone-600"
+                  }`}
                 >
-                  <div
-                    className={`w-16 h-16 rounded-full flex items-center justify-center text-white font-bold mb-1 ${
-                      story.hasNew
-                        ? "bg-gradient-to-tr from-amber-500 via-pink-500 to-purple-500 p-0.5"
-                        : "bg-stone-700 border-2 border-stone-600"
-                    }`}
-                  >
-                    <div className="w-full h-full rounded-full bg-black flex items-center justify-center">
-                      <span className="text-amber-300">{story.avatar}</span>
+                  <div className="w-full h-full rounded-full bg-black flex items-center justify-center">
+                    <span className="text-amber-300">{story.avatar}</span>
+                  </div>
+                </div>
+                <span className="text-xs text-amber-200 truncate w-16 text-center">
+                  {story.username}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Feed Posts */}
+      {loading && posts.length === 0 && !backendError ? (
+        <div className="flex justify-center items-center h-64">
+          <div className="text-amber-300">Loading posts...</div>
+        </div>
+      ) : backendError && posts.length === 0 ? (
+        <div className="flex flex-col justify-center items-center h-64 text-center px-4">
+          <div className="text-6xl mb-4">⏳</div>
+          <div className="text-amber-300 text-xl font-semibold mb-2">
+            Backend Server Not Running
+          </div>
+          <div className="text-amber-400 mb-4">
+            Please start the backend server to load posts.
+          </div>
+          <div className="text-amber-400 text-sm mt-2">
+            Make sure MongoDB is running and the backend is started on port
+            5000.
+          </div>
+          <div className="text-amber-400 text-sm mt-2">
+            To start: `cd backend && npm run dev` or use
+            `start-dev.bat`/`start-dev.sh`
+          </div>
+        </div>
+      ) : visiblePosts.length === 0 ? (
+        <div className="flex flex-col justify-center items-center h-64 text-center px-4">
+          <div className="text-6xl mb-4">✨</div>
+          <div className="text-amber-300 text-xl font-semibold mb-2">No posts yet</div>
+          <div className="text-amber-400">
+            Be the first to share something with the community!
+          </div>
+        </div>
+      ) : (
+        <div className="pb-20">
+          {visiblePosts.map((post, index) => (
+              <div
+                key={post.id}
+                id={`post-${post.id}`}
+                ref={index === visiblePosts.length - 1 ? lastPostRef : null}
+                className={`bg-black border-b mb-1 transition-all duration-500 ${
+                  highlightedSharedPostId === post.id
+                    ? "border-amber-400 shadow-[0_0_0_1px_rgba(251,191,36,0.7)]"
+                    : "border-stone-800"
+                }`}
+              >
+                {/* Post Header */}
+                <div className="flex items-center justify-between px-4 py-3">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-amber-500 to-pink-500 p-0.5">
+                      <div className="w-full h-full rounded-full bg-black flex items-center justify-center overflow-hidden">
+                        {post.avatar ? (
+                          <img
+                            src={post.avatar}
+                            alt={post.displayName}
+                            className="w-full h-full object-cover"
+                            onError={() =>
+                              setPosts((prev) =>
+                                prev.map((item) =>
+                                  item.id === post.id
+                                    ? { ...item, avatar: null }
+                                    : item,
+                                ),
+                              )
+                            }
+                          />
+                        ) : (
+                          <span className="text-amber-300 text-sm font-bold">
+                            {post.avatarInitial}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-white font-semibold text-sm">
+                        {post.displayName}
+                      </div>
+                      {post.isRepost && (
+                        <div className="text-amber-400 text-xs">
+                          Reposted from @{post.originalPost?.username}
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <span className="text-xs text-amber-200 truncate w-16 text-center">
-                    {story.username}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Feed Posts */}
-        {loading && posts.length === 0 && !backendError ? (
-          <div className="flex justify-center items-center h-64">
-            <div className="text-amber-300">Loading posts...</div>
-          </div>
-        ) : backendError && posts.length === 0 ? (
-          <div className="flex flex-col justify-center items-center h-64 text-center px-4">
-            <div className="text-6xl mb-4">⏳</div>
-            <div className="text-amber-300 text-xl font-semibold mb-2">
-              Backend Server Not Running
-            </div>
-            <div className="text-amber-400 mb-4">
-              Please start the backend server to load posts.
-            </div>
-            <div className="text-amber-400 text-sm mt-2">
-              Make sure MongoDB is running and the backend is started on port 5000.
-            </div>
-            <div className="text-amber-400 text-sm mt-2">
-              To start: `cd backend && npm run dev` or use `start-dev.bat`/`start-dev.sh`
-            </div>
-          </div>
-        ) : posts.length === 0 ? (
-          <div className="flex flex-col justify-center items-center h-64 text-center px-4">
-            <div className="text-6xl mb-4">✨</div>
-            <div className="text-amber-300 text-xl font-semibold mb-2">
-              No posts yet
-            </div>
-            <div className="text-amber-400">
-              Be the first to share something with the community!
-            </div>
-          </div>
-        ) : (
-          <div className="pb-20">
-            {posts
-              .filter((post) => !hiddenReportedPosts[post.id])
-              .map((post, index) => (
-          <div
-            key={post.id}
-            ref={index === posts.length - 1 ? lastPostRef : null}
-            className="bg-black border-b border-stone-800 mb-1"
-          >
-            {/* Post Header */}
-            <div className="flex items-center justify-between px-4 py-3">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-amber-500 to-pink-500 p-0.5">
-                  <div className="w-full h-full rounded-full bg-black flex items-center justify-center overflow-hidden">
-                    {post.avatar ? (
-                      <img
-                        src={post.avatar}
-                        alt={post.displayName}
-                        className="w-full h-full object-cover"
-                        onError={() =>
-                          setPosts((prev) =>
-                            prev.map((item) =>
-                              item.id === post.id ? { ...item, avatar: null } : item
-                            )
-                          )
-                        }
-                      />
-                    ) : (
-                      <span className="text-amber-300 text-sm font-bold">
-                        {post.avatarInitial}
-                      </span>
+                  <div className="relative">
+                    <button
+                      onClick={() => togglePostMenu(post.id)}
+                      className="text-white px-2 py-1"
+                      aria-label="Post actions"
+                    >
+                      <Ellipsis className="w-5 h-5" />
+                    </button>
+                    {activePostMenu === post.id && (
+                      <div className="absolute right-0 mt-2 w-40 bg-stone-900 border border-amber-500/30 rounded-lg shadow-lg z-20">
+                        {post.ownerId?.toString() === user?._id?.toString() && (
+                          <button
+                            onClick={() => openEditPost(post)}
+                            className="w-full text-left px-4 py-2 text-amber-200 hover:bg-stone-800"
+                          >
+                            Edit post
+                          </button>
+                        )}
+                        {post.ownerId?.toString() === user?._id?.toString() && (
+                          <button
+                            onClick={() => requestDeletePost(post.id)}
+                            className="w-full text-left px-4 py-2 text-red-300 hover:bg-stone-800"
+                          >
+                            Delete post
+                          </button>
+                        )}
+                        {post.ownerId?.toString() !== user?._id?.toString() && (
+                          <button
+                            onClick={() => openReportPost(post.id)}
+                            className="w-full text-left px-4 py-2 text-amber-200 hover:bg-stone-800 rounded-lg"
+                          >
+                            Report post
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
-                <div>
-                  <div className="text-white font-semibold text-sm">
-                    {post.displayName}
+
+                {/* Post Image with Double Tap */}
+                {post.imageUrl && (
+                  <div
+                    className="relative w-full aspect-square bg-stone-900"
+                    onDoubleClick={() => handleDoubleTap(post.id)}
+                  >
+                    {post.mediaType === "video" ? (
+                      <video
+                        src={post.imageUrl}
+                        className="w-full h-full object-cover"
+                        controls
+                      />
+                    ) : (
+                      <img
+                        src={post.imageUrl}
+                        alt="Post"
+                        className="w-full h-full object-cover"
+                      />
+                    )}
+                    {/* Heart Animation */}
+                    {heartAnimations[post.id] && (
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="text-8xl animate-ping">❤️</div>
+                      </div>
+                    )}
                   </div>
-                  {post.isRepost && (
-                    <div className="text-amber-400 text-xs">
-                      Reposted from @{post.originalPost?.username}
+                )}
+
+                {/* Post Actions */}
+                <div className="px-4 py-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center space-x-4">
+                      <button
+                        onClick={() => handleLike(post.id)}
+                        aria-label="Like post"
+                      >
+                        <Heart
+                          className={`w-6 h-6 transition-colors ${
+                            post.isLiked
+                              ? "fill-red-500 text-red-500"
+                              : "text-white"
+                          }`}
+                        />
+                      </button>
+                      <button
+                        onClick={() => toggleComments(post.id)}
+                        aria-label="Comment on post"
+                      >
+                        <MessageCircle className="w-6 h-6 text-white" />
+                      </button>
+                      <div className="relative">
+                        <button
+                          onClick={() => toggleShareMenu(post.id)}
+                          aria-label="Share post"
+                        >
+                          <Send className="w-6 h-6 text-white" />
+                        </button>
+                        {activeSharePostId === post.id && (
+                          <div className="absolute left-0 mt-2 w-44 bg-stone-900 border border-amber-500/30 rounded-lg shadow-lg z-20">
+                            <button
+                              type="button"
+                              onClick={() => shareToTelegram(post)}
+                              className="w-full text-left px-4 py-2 text-amber-200 hover:bg-stone-800"
+                            >
+                              Share to Telegram
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => shareToWhatsApp(post)}
+                              className="w-full text-left px-4 py-2 text-amber-200 hover:bg-stone-800"
+                            >
+                              Share to WhatsApp
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => copyPostLink(post)}
+                              className="w-full text-left px-4 py-2 text-amber-200 hover:bg-stone-800 rounded-b-lg"
+                            >
+                              Copy Post Link
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleSave(post.id)}
+                      aria-label="Save post"
+                    >
+                      <Bookmark
+                        className={`w-6 h-6 transition-colors ${
+                          post.isSaved
+                            ? "fill-amber-400 text-amber-400"
+                            : "text-white"
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {/* Likes Count */}
+                  <div className="mb-1">
+                    <span className="text-white font-semibold text-sm">
+                      {post.likes} likes
+                    </span>
+                  </div>
+
+                  {/* Caption */}
+                  <div className="mb-2">
+                    <span className="text-white text-sm break-words">
+                      {renderCaptionWithMentions(post.caption)}
+                    </span>
+                  </div>
+
+                  {/* View Comments */}
+                  {post.comments > 0 && !showComments[post.id] && (
+                    <button
+                      onClick={() => toggleComments(post.id)}
+                      className="text-stone-400 text-sm mb-2"
+                    >
+                      View all {post.comments} comments
+                    </button>
+                  )}
+
+                  {/* Timestamp */}
+                  <div className="text-stone-400 text-xs uppercase mb-2">
+                    {post.timestamp}
+                  </div>
+
+                  {/* Comments Section */}
+                  {showComments[post.id] && (
+                    <div className="border-t border-stone-800 pt-3 mt-3">
+                      <div className="max-h-48 overflow-y-auto mb-3 space-y-2">
+                        {post.commentsList?.map((comment) => (
+                          <div
+                            key={comment._id || comment.id}
+                            className="space-y-2"
+                          >
+                            <div className="flex items-start gap-2">
+                              <div className="w-7 h-7 rounded-full bg-stone-700 overflow-hidden flex-shrink-0 mt-0.5">
+                                {comment.userAvatar ? (
+                                  <img
+                                    src={comment.userAvatar}
+                                    alt={comment.username}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center text-[11px] text-amber-200 font-semibold">
+                                    {(comment.username || "U")
+                                      .charAt(0)
+                                      .toUpperCase()}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <span className="text-white font-semibold text-sm mr-2">
+                                  {comment.username}
+                                </span>
+                                <span className="text-white text-sm break-words">
+                                  {renderCaptionWithMentions(comment.text)}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-4 pl-2">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  toggleReplyInput(
+                                    post.id,
+                                    comment._id || comment.id,
+                                  )
+                                }
+                                className="text-xs text-amber-300 hover:text-amber-200"
+                              >
+                                Reply
+                              </button>
+                              {(comment.replies || []).length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    toggleReplies(
+                                      post.id,
+                                      comment._id || comment.id,
+                                    )
+                                  }
+                                  className="text-xs text-stone-400 hover:text-stone-300"
+                                >
+                                  {showReplies[
+                                    `${post.id}:${comment._id || comment.id}`
+                                  ]
+                                    ? "Hide replies"
+                                    : `View replies (${(comment.replies || []).length})`}
+                                </button>
+                              )}
+                            </div>
+                            {showReplies[
+                              `${post.id}:${comment._id || comment.id}`
+                            ] &&
+                              (comment.replies || []).length > 0 && (
+                                <div className="pl-4 border-l border-stone-700 space-y-1">
+                                  {(comment.replies || []).map((reply) => (
+                                    <div
+                                      key={reply._id || reply.id}
+                                      className="flex items-start gap-2"
+                                    >
+                                      <div className="w-6 h-6 rounded-full bg-stone-700 overflow-hidden flex-shrink-0 mt-0.5">
+                                        {reply.userAvatar ? (
+                                          <img
+                                            src={reply.userAvatar}
+                                            alt={reply.username}
+                                            className="w-full h-full object-cover"
+                                          />
+                                        ) : (
+                                          <div className="w-full h-full flex items-center justify-center text-[10px] text-amber-200 font-semibold">
+                                            {(reply.username || "U")
+                                              .charAt(0)
+                                              .toUpperCase()}
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div className="min-w-0">
+                                        <span className="text-amber-200 font-semibold text-xs mr-2">
+                                          {reply.username}
+                                        </span>
+                                        <span className="text-amber-100 text-xs break-words">
+                                          {renderCaptionWithMentions(
+                                            reply.text,
+                                          )}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            {showReplyInput[
+                              `${post.id}:${comment._id || comment.id}`
+                            ] && (
+                              <div className="pl-4 flex items-center gap-2">
+                                <input
+                                  type="text"
+                                  value={
+                                    newReply[
+                                      `${post.id}:${comment._id || comment.id}`
+                                    ] || ""
+                                  }
+                                  onChange={(e) =>
+                                    setNewReply((prev) => ({
+                                      ...prev,
+                                      [`${post.id}:${comment._id || comment.id}`]:
+                                        e.target.value,
+                                    }))
+                                  }
+                                  placeholder="Write a reply..."
+                                  className="flex-1 bg-transparent text-amber-100 placeholder-stone-500 text-xs focus:outline-none"
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      handleAddReply(
+                                        post.id,
+                                        comment._id || comment.id,
+                                      );
+                                    }
+                                  }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleAddReply(
+                                      post.id,
+                                      comment._id || comment.id,
+                                    )
+                                  }
+                                  disabled={
+                                    !newReply[
+                                      `${post.id}:${comment._id || comment.id}`
+                                    ]?.trim()
+                                  }
+                                  className="text-amber-400 font-semibold text-xs disabled:opacity-50"
+                                >
+                                  Send
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Add Comment */}
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="text"
+                          value={newComment[post.id] || ""}
+                          onChange={(e) =>
+                            setNewComment((prev) => ({
+                              ...prev,
+                              [post.id]: e.target.value,
+                            }))
+                          }
+                          placeholder="Add a comment..."
+                          className="flex-1 bg-transparent text-white placeholder-stone-500 text-sm focus:outline-none"
+                          onKeyPress={(e) => {
+                            if (e.key === "Enter") {
+                              handleAddComment(post.id);
+                            }
+                          }}
+                        />
+                        <button
+                          onClick={() => handleAddComment(post.id)}
+                          disabled={!newComment[post.id]?.trim()}
+                          className="text-amber-400 font-semibold text-sm disabled:opacity-50"
+                        >
+                          Post
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
               </div>
-              <div className="relative">
-                <button
-                  onClick={() => togglePostMenu(post.id)}
-                  className="text-white px-2 py-1"
-                  aria-label="Post actions"
-                >
-                  <Ellipsis className="w-5 h-5" />
-                </button>
-                {activePostMenu === post.id && (
-                  <div className="absolute right-0 mt-2 w-40 bg-stone-900 border border-amber-500/30 rounded-lg shadow-lg z-20">
-                    {post.ownerId?.toString() === user?._id?.toString() && (
-                      <button
-                        onClick={() => openEditPost(post)}
-                        className="w-full text-left px-4 py-2 text-amber-200 hover:bg-stone-800"
-                      >
-                        Edit post
-                      </button>
-                    )}
-                    {post.ownerId?.toString() === user?._id?.toString() && (
-                      <button
-                        onClick={() => requestDeletePost(post.id)}
-                        className="w-full text-left px-4 py-2 text-red-300 hover:bg-stone-800"
-                      >
-                        Delete post
-                      </button>
-                    )}
-                    {post.ownerId?.toString() !== user?._id?.toString() && (
-                      <button
-                        onClick={() => openReportPost(post.id)}
-                        className="w-full text-left px-4 py-2 text-amber-200 hover:bg-stone-800 rounded-lg"
-                      >
-                        Report post
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Post Image with Double Tap */}
-            {post.imageUrl && (
-              <div
-                className="relative w-full aspect-square bg-stone-900"
-                onDoubleClick={() => handleDoubleTap(post.id)}
-              >
-                {post.mediaType === "video" ? (
-                  <video
-                    src={post.imageUrl}
-                    className="w-full h-full object-cover"
-                    controls
-                  />
-                ) : (
-                  <img
-                    src={post.imageUrl}
-                    alt="Post"
-                    className="w-full h-full object-cover"
-                  />
-                )}
-                {/* Heart Animation */}
-                {heartAnimations[post.id] && (
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="text-8xl animate-ping">❤️</div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Post Actions */}
-            <div className="px-4 py-3">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center space-x-4">
-                  <button onClick={() => handleLike(post.id)} aria-label="Like post">
-                    <Heart
-                      className={`w-6 h-6 transition-colors ${
-                        post.isLiked ? "fill-red-500 text-red-500" : "text-white"
-                      }`}
-                    />
-                  </button>
-                  <button onClick={() => toggleComments(post.id)} aria-label="Comment on post">
-                    <MessageCircle className="w-6 h-6 text-white" />
-                  </button>
-                  <button onClick={() => handleRepost(post)} aria-label="Share post">
-                    <Send className="w-6 h-6 text-white" />
-                  </button>
-                </div>
-                <button onClick={() => handleSave(post.id)} aria-label="Save post">
-                  <Bookmark
-                    className={`w-6 h-6 transition-colors ${
-                      post.isSaved ? "fill-amber-400 text-amber-400" : "text-white"
-                    }`}
-                  />
-                </button>
-              </div>
-
-              {/* Likes Count */}
-              <div className="mb-1">
-                <span className="text-white font-semibold text-sm">
-                  {post.likes} likes
-                </span>
-              </div>
-
-              {/* Caption */}
-              <div className="mb-2">
-                <span className="text-white text-sm break-words">
-                  {renderCaptionWithMentions(post.caption)}
-                </span>
-              </div>
-
-              {/* View Comments */}
-              {post.comments > 0 && !showComments[post.id] && (
-                <button
-                  onClick={() => toggleComments(post.id)}
-                  className="text-stone-400 text-sm mb-2"
-                >
-                  View all {post.comments} comments
-                </button>
-              )}
-
-              {/* Timestamp */}
-              <div className="text-stone-400 text-xs uppercase mb-2">
-                {post.timestamp}
-              </div>
-
-              {/* Comments Section */}
-              {showComments[post.id] && (
-                <div className="border-t border-stone-800 pt-3 mt-3">
-                  <div className="max-h-48 overflow-y-auto mb-3 space-y-2">
-                    {post.commentsList?.map((comment) => (
-                      <div key={comment._id || comment.id} className="flex items-start">
-                        <span className="text-white font-semibold text-sm mr-2">
-                          {comment.username}
-                        </span>
-                        <span className="text-white text-sm">
-                          {comment.text}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Add Comment */}
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="text"
-                      value={newComment[post.id] || ""}
-                      onChange={(e) =>
-                        setNewComment((prev) => ({
-                          ...prev,
-                          [post.id]: e.target.value,
-                        }))
-                      }
-                      placeholder="Add a comment..."
-                      className="flex-1 bg-transparent text-white placeholder-stone-500 text-sm focus:outline-none"
-                      onKeyPress={(e) => {
-                        if (e.key === "Enter") {
-                          handleAddComment(post.id);
-                        }
-                      }}
-                    />
-                    <button
-                      onClick={() => handleAddComment(post.id)}
-                      disabled={!newComment[post.id]?.trim()}
-                      className="text-amber-400 font-semibold text-sm disabled:opacity-50"
-                    >
-                      Post
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
             ))}
-            {hasMore && (
-              <div ref={lastPostRef} className="h-10 flex items-center justify-center">
-                {loading && <div className="text-amber-300">Loading more...</div>}
-              </div>
-            )}
-          </div>
-        )}
+          {hasMore && (
+            <div
+              ref={lastPostRef}
+              className="h-10 flex items-center justify-center"
+            >
+              {loading && <div className="text-amber-300">Loading more...</div>}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Repost Modal */}
       {showRepostModal && repostPost && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-stone-900 rounded-2xl p-6 max-w-md w-full border border-amber-500/30">
-            <h2 className="text-2xl font-bold text-amber-300 mb-4">
-              Repost
-            </h2>
+            <h2 className="text-2xl font-bold text-amber-300 mb-4">Repost</h2>
             <div className="mb-4">
               <img
                 src={repostPost.imageUrl}
@@ -1025,7 +1432,9 @@ const InstagramFeed = () => {
       {showDeleteConfirmModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-stone-900 rounded-2xl p-6 max-w-md w-full border border-red-500/30">
-            <h2 className="text-2xl font-bold text-red-300 mb-3">Delete Post</h2>
+            <h2 className="text-2xl font-bold text-red-300 mb-3">
+              Delete Post
+            </h2>
             <p className="text-amber-100/90 mb-5 leading-relaxed">
               Delete this post permanently? This action cannot be undone.
             </p>
@@ -1053,9 +1462,12 @@ const InstagramFeed = () => {
       {showReportModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-stone-900 rounded-2xl p-6 max-w-md w-full border border-amber-500/30">
-            <h2 className="text-2xl font-bold text-amber-300 mb-4">Report Post</h2>
+            <h2 className="text-2xl font-bold text-amber-300 mb-4">
+              Report Post
+            </h2>
             <p className="text-amber-100/80 text-sm mb-4">
-              Help keep the community safe. Select the closest reason and add extra details if needed.
+              Help keep the community safe. Select the closest reason and add
+              extra details if needed.
             </p>
             <div className="space-y-2 mb-4">
               {REPORT_OPTIONS.map((option) => (
@@ -1207,83 +1619,83 @@ const InstagramFeed = () => {
         </div>
       )}
 
-        {/* Create Post Modal */}
-        {showCreatePost && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-stone-900 rounded-2xl p-6 max-w-md w-full border border-amber-500/30">
-              <h2 className="text-2xl font-bold text-amber-300 mb-4">
-                Create Post
-              </h2>
-              <form onSubmit={handleCreatePost}>
-                {newPostPreview && (
-                  <div className="mb-4">
-                    <img
-                      src={newPostPreview}
-                      alt="Preview"
-                      className="w-full h-64 object-cover rounded-lg"
-                    />
-                  </div>
-                )}
-                <textarea
-                  value={newPostContent}
-                  onChange={(e) => setNewPostContent(e.target.value)}
-                  placeholder="What's on your mind? Use @username to mention someone."
-                  className="w-full bg-stone-800 border border-amber-500/30 rounded-lg p-3 text-amber-200 placeholder-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500 mb-4"
-                  rows="4"
-                />
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleMediaSelect}
-                  accept="image/*,video/*"
-                  className="hidden"
-                />
-                <div className="flex space-x-3 mb-4">
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="flex-1 px-4 py-2 rounded-lg border border-amber-500/30 text-amber-300 hover:bg-stone-800"
-                  >
-                    Add Photo/Video
-                  </button>
-                  {newPostPreview && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNewPostPreview(null);
-                        setNewPostMedia(null);
-                        if (fileInputRef.current) {
-                          fileInputRef.current.value = "";
-                        }
-                      }}
-                      className="px-4 py-2 rounded-lg border border-red-500/30 text-red-300 hover:bg-red-900/20"
-                    >
-                      Remove
-                    </button>
-                  )}
+      {/* Create Post Modal */}
+      {showCreatePost && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-stone-900 rounded-2xl p-6 max-w-md w-full border border-amber-500/30">
+            <h2 className="text-2xl font-bold text-amber-300 mb-4">
+              Create Post
+            </h2>
+            <form onSubmit={handleCreatePost}>
+              {newPostPreview && (
+                <div className="mb-4">
+                  <img
+                    src={newPostPreview}
+                    alt="Preview"
+                    className="w-full h-64 object-cover rounded-lg"
+                  />
                 </div>
-                <div className="flex space-x-3">
+              )}
+              <textarea
+                value={newPostContent}
+                onChange={(e) => setNewPostContent(e.target.value)}
+                placeholder="What's on your mind? Use @username to mention someone."
+                className="w-full bg-stone-800 border border-amber-500/30 rounded-lg p-3 text-amber-200 placeholder-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500 mb-4"
+                rows="4"
+              />
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleMediaSelect}
+                accept="image/*,video/*"
+                className="hidden"
+              />
+              <div className="flex space-x-3 mb-4">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex-1 px-4 py-2 rounded-lg border border-amber-500/30 text-amber-300 hover:bg-stone-800"
+                >
+                  Add Photo/Video
+                </button>
+                {newPostPreview && (
                   <button
                     type="button"
                     onClick={() => {
-                      setShowCreatePost(false);
-                      setNewPostContent("");
-                      setNewPostMedia(null);
                       setNewPostPreview(null);
+                      setNewPostMedia(null);
+                      if (fileInputRef.current) {
+                        fileInputRef.current.value = "";
+                      }
                     }}
-                    className="flex-1 px-4 py-2 rounded-lg border border-amber-500/30 text-amber-300 hover:bg-stone-800"
+                    className="px-4 py-2 rounded-lg border border-red-500/30 text-red-300 hover:bg-red-900/20"
                   >
-                    Cancel
+                    Remove
                   </button>
-                  <button
-                    type="submit"
-                    disabled={!newPostContent.trim() && !newPostMedia}
-                    className="flex-1 px-4 py-2 rounded-lg bg-gold-gradient text-black font-semibold hover:opacity-90 disabled:opacity-50"
-                  >
-                    Post
-                  </button>
-                </div>
-              </form>
+                )}
+              </div>
+              <div className="flex space-x-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCreatePost(false);
+                    setNewPostContent("");
+                    setNewPostMedia(null);
+                    setNewPostPreview(null);
+                  }}
+                  className="flex-1 px-4 py-2 rounded-lg border border-amber-500/30 text-amber-300 hover:bg-stone-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!newPostContent.trim() && !newPostMedia}
+                  className="flex-1 px-4 py-2 rounded-lg bg-gold-gradient text-black font-semibold hover:opacity-90 disabled:opacity-50"
+                >
+                  Post
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -1292,4 +1704,3 @@ const InstagramFeed = () => {
 };
 
 export default InstagramFeed;
-
